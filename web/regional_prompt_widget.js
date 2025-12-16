@@ -13,7 +13,7 @@ app.registerExtension({
   name: "Steaked.RegionalPrompts",
 
   async beforeRegisterNodeDef(nodeType, nodeData, app) {
-    if (nodeData.name !== "RegionalPromptsLatent" && nodeData.name !== "RegionalPromptsAttention") return;
+    if (nodeData.name !== "RegionalPromptsLatent" && nodeData.name !== "RegionalPromptsAttention" && nodeData.name !== "RegionalPromptsAttentionExperimental") return;
 
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
@@ -226,7 +226,6 @@ app.registerExtension({
       if (originalOnDrawForeground) originalOnDrawForeground.apply(this, arguments);
 
       if (!this.canvasPlaceholder) {
-        console.log("Steaked.RegionalPrompts: No placeholder found");
         return;
       }
 
@@ -271,8 +270,6 @@ app.registerExtension({
         scaleX: displayWidth / imgW,
         scaleY: displayHeight / imgH,
       };
-
-      console.log("Steaked.RegionalPrompts: Drawing at", startX, startY, displayWidth, displayHeight);
 
       // Draw Canvas Background
       ctx.save();

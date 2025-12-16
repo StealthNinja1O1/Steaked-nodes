@@ -5,9 +5,8 @@ from .texture_generator import NebulaGenerator
 from .edge_detection import EdgeDetection
 from .blend import ImageBlender
 from .halftone import HalftoneEffect
-from .regional_prompts import RegionalPromptsLatent, RegionalPromptsAttention
+from .regional_prompts import RegionalPromptsLatent, RegionalPromptsAttention, RegionalPromptsAttentionExperimental
 
-# Merge all node mappings
 NODE_CLASS_MAPPINGS = {
     "LoadAndCrop": ImageCrop,
     "ColorBlender": ColorBlender,
@@ -19,6 +18,7 @@ NODE_CLASS_MAPPINGS = {
     "HalftoneEffect": HalftoneEffect,
     "RegionalPromptsLatent": RegionalPromptsLatent,
     "RegionalPromptsAttention": RegionalPromptsAttention,
+    "RegionalPromptsAttentionExperimental": RegionalPromptsAttentionExperimental,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -30,6 +30,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "HalftoneEffect": "Halftone Effect",
     "RegionalPromptsLatent": "Regional Prompts (Latent)",
     "RegionalPromptsAttention": "Regional Prompts (Attention)",
+    "RegionalPromptsAttentionExperimental": "Regional Prompts (Attention Experimental)",
 }
 
 WEB_DIRECTORY = "./web/"
