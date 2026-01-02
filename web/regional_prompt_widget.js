@@ -12,18 +12,26 @@ const BOX_COLORS = {
 app.registerExtension({
   name: "Steaked.RegionalPrompts",
 
-  async beforeRegisterNodeDef(nodeType, nodeData, app) {
-    if (nodeData.name !== "RegionalPromptsLatent" && nodeData.name !== "RegionalPromptsAttention" && nodeData.name !== "RegionalPromptsAttentionExperimental") return;
+  async beforeRegisterNodeDef(nodeType, nodeData) {
+    const supportedNodes = [
+      "RegionalPromptsLatent",
+      "RegionalPromptsAttention",
+      "RegionalPromptsLatentImg2Img",
+      "RegionalPromptsAttentionImg2Img",
+    ];
+
+    if (!supportedNodes.includes(nodeData.name)) return;
 
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
 
       this.serialize_widgets = true;
+      this.isImg2Img = nodeData.name.includes("Img2Img");
 
       // State initialization
       this.boxState = {
-        boxes: [], // Array of {id, x, y, w, h}
+        boxes: [],
         selectedBoxId: null,
         isDragging: false,
         isResizing: false,
@@ -33,21 +41,17 @@ app.registerExtension({
         initialBox: null,
         canvasWidth: 1024,
         canvasHeight: 1024,
+        backgroundImage: null,
       };
 
-      // Setup box_data widget (hidden but serialized)
-      // Check if it exists from Python def (it might be in widgets list if extended properly, but safer to add/find)
+      // Setup box_data widget
       let boxDataWidget = this.widgets.find((w) => w.name === "box_data");
-
       if (!boxDataWidget) {
-        // Create if not found (standard pattern for passing data to hidden inputs)
         boxDataWidget = this.addWidget("text", "box_data", "", (v) => {}, { serialize: true });
       }
-
-      // Ensure hidden properties
       boxDataWidget.computeSize = () => [0, -4];
 
-      // Initialize from saved value if exists
+      // Initialize from saved value
       if (boxDataWidget.value) {
         try {
           this.boxState.boxes = JSON.parse(boxDataWidget.value);
@@ -57,8 +61,6 @@ app.registerExtension({
       }
 
       this.boxDataWidget = boxDataWidget;
-
-      // Variables to track property widgets
       this.propWidgets = {};
 
       const addPropWidget = (name, type, defaultVal, callback, options = {}) => {
@@ -100,20 +102,16 @@ app.registerExtension({
         this.removeSelectedBox();
       });
 
-      // Add Canvas Placeholder Widget
-      // This widget reserves space in the layout for our custom drawing
+      // Canvas Placeholder Widget
       const canvasPlaceholder = this.addWidget("text", "canvas_placeholder", "", () => {}, { serialize: false });
-      canvasPlaceholder.type = "canvas_placeholder"; // Custom type to avoid default drawing
-
+      canvasPlaceholder.type = "canvas_placeholder";
       canvasPlaceholder.draw = function () {};
-
       canvasPlaceholder.computeSize = (width) => {
         if (this.boxState && this.boxState.canvasHeight && this.boxState.canvasWidth) {
           const aspect = this.boxState.canvasHeight / this.boxState.canvasWidth;
-          // Reserve height based on aspect ratio
           return [width, width * aspect];
         }
-        return [width, 300]; // Default fallback
+        return [width, 300];
       };
 
       this.canvasPlaceholder = canvasPlaceholder;
@@ -131,14 +129,29 @@ app.registerExtension({
         }
       };
 
-      // Size estimation
-      this.setSize([400, 600]);
+      // For img2img nodes, setup image loading
+      if (this.isImg2Img) {
+        const imageWidget = this.widgets.find((w) => w.name === "image");
+        if (imageWidget) {
+          // Hook into image widget's callback to load the image
+          const originalCallback = imageWidget.callback;
+          imageWidget.callback = (v) => {
+            if (originalCallback) originalCallback(v);
+            this.loadBackgroundImage(v);
+          };
 
+          // Load initial image if set
+          if (imageWidget.value) {
+            this.loadBackgroundImage(imageWidget.value);
+          }
+        }
+      }
+
+      this.setSize([400, 600]);
       return r;
     };
 
     nodeType.prototype.onConfigure = function (o) {
-      // Restore box state from widget value
       if (this.widgets) {
         const boxDataWidget = this.widgets.find((w) => w.name === "box_data");
         if (boxDataWidget && boxDataWidget.value) {
@@ -152,10 +165,31 @@ app.registerExtension({
       }
     };
 
-    // Helper to get dimensions from inputs
+    nodeType.prototype.loadBackgroundImage = function(imageName) {
+      if (!imageName) return;
+
+      const img = new Image();
+      img.src = `/view?filename=${encodeURIComponent(imageName)}&type=input&subfolder=`;
+
+      img.onload = () => {
+        this.boxState.backgroundImage = img;
+        this.boxState.canvasWidth = img.width;
+        this.boxState.canvasHeight = img.height;
+        this.setDirtyCanvas(true, true);
+      };
+
+      img.onerror = () => {
+        console.error("Failed to load background image:", imageName);
+      };
+    };
+
+    // Helper to get dimensions from inputs (for non-img2img nodes)
     nodeType.prototype.getCanvasDimensions = function () {
-      let w = 1024,
-        h = 1024;
+      if (this.isImg2Img) {
+        return { w: this.boxState.canvasWidth || 1024, h: this.boxState.canvasHeight || 1024 };
+      }
+
+      let w = 1024, h = 1024;
       const wWidget = this.widgets.find((w) => w.name === "width");
       const hWidget = this.widgets.find((w) => w.name === "height");
       if (wWidget) w = wWidget.value;
@@ -166,15 +200,12 @@ app.registerExtension({
     nodeType.prototype.addBox = function () {
       const { w, h } = this.getCanvasDimensions();
       const currentCount = this.boxState.boxes.length;
-      if (currentCount >= 4) return; // Max 4 boxes
+      if (currentCount >= 4) return;
 
-      // Find first available ID
       const usedIds = new Set(this.boxState.boxes.map((b) => b.id));
       let newId = 1;
       while (usedIds.has(newId)) newId++;
 
-      // Smart placement? Center or cascade.
-      // Let's just place it at (newId-1)*50, (newId-1)*50
       const offset = (newId - 1) * 50;
       const boxSize = Math.min(w, h) / 4;
 
@@ -222,43 +253,30 @@ app.registerExtension({
     nodeType.prototype.onDrawForeground = function (ctx) {
       if (originalOnDrawForeground) originalOnDrawForeground.apply(this, arguments);
 
-      if (!this.canvasPlaceholder) {
-        return;
-      }
-
-      // Wait for layout to happen (last_y populated)
-      if (this.canvasPlaceholder.last_y === undefined) {
-        // console.log("Steaked.RegionalPrompts: Waiting for layout...");
+      if (!this.canvasPlaceholder || this.canvasPlaceholder.last_y === undefined) {
         return;
       }
 
       const margin = 10;
-
-      // Use the placeholder's position
-      // The placeholder starts after previous widgets.
       const startY = this.canvasPlaceholder.last_y;
 
-      // Use the placeholder's height (computed by LiteGraph layout) if available, or calc
       let displayHeight = 300;
       if (this.canvasPlaceholder.last_h) {
         displayHeight = this.canvasPlaceholder.last_h;
       } else if (this.boxState.canvasHeight) {
-        const imgAspect = this.boxState.canvasHeight / this.boxState.canvasWidth; // Corrected aspect ratio calc (H/W)
+        const imgAspect = this.boxState.canvasHeight / this.boxState.canvasWidth;
         displayHeight = (this.size[0] - margin * 2) * imgAspect;
       }
 
       const availableWidth = this.size[0] - margin * 2;
       let displayWidth = availableWidth;
 
-      // Center horizontally
       const startX = margin + (availableWidth - displayWidth) / 2;
 
-      // Save bounds for interaction
       const { w: imgW, h: imgH } = this.getCanvasDimensions();
       this.boxState.canvasWidth = imgW;
       this.boxState.canvasHeight = imgH;
 
-      // Recalculate scale based on actual drawn area
       this.displayBounds = {
         startX,
         startY,
@@ -268,29 +286,32 @@ app.registerExtension({
         scaleY: displayHeight / imgH,
       };
 
-      // Draw Canvas Background
       ctx.save();
-      ctx.fillStyle = "#333";
-      ctx.fillRect(startX, startY, displayWidth, displayHeight);
-      ctx.strokeStyle = "#666";
-      ctx.strokeRect(startX, startY, displayWidth, displayHeight);
+
+      // Draw background image (for img2img) or dark canvas (for txt2img)
+      if (this.boxState.backgroundImage) {
+        ctx.drawImage(this.boxState.backgroundImage, startX, startY, displayWidth, displayHeight);
+      } else {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(startX, startY, displayWidth, displayHeight);
+        ctx.strokeStyle = "#666";
+        ctx.strokeRect(startX, startY, displayWidth, displayHeight);
+      }
 
       // Draw Grid
       ctx.strokeStyle = "rgba(100, 100, 100, 0.3)";
       ctx.lineWidth = 1;
       ctx.beginPath();
 
-      const gridSize = 128; // Grid cell size in image pixels
+      const gridSize = 128;
       const gridSpacingX = gridSize * this.displayBounds.scaleX;
       const gridSpacingY = gridSize * this.displayBounds.scaleY;
 
-      // Vertical lines
       for (let x = gridSpacingX; x < displayWidth; x += gridSpacingX) {
         ctx.moveTo(startX + x, startY);
         ctx.lineTo(startX + x, startY + displayHeight);
       }
 
-      // Horizontal lines
       for (let y = gridSpacingY; y < displayHeight; y += gridSpacingY) {
         ctx.moveTo(startX, startY + y);
         ctx.lineTo(startX + displayWidth, startY + y);
@@ -298,7 +319,6 @@ app.registerExtension({
       ctx.stroke();
 
       // Draw Boxes
-      // Draw unselected boxes first
       const boxes = this.boxState.boxes;
 
       const drawBox = (box, isSelected) => {
@@ -318,13 +338,11 @@ app.registerExtension({
         ctx.lineWidth = isSelected ? 2 : 1;
         ctx.strokeRect(bx, by, bw, bh);
 
-        // Draw ID
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "bold 16px Arial";
         ctx.fillText(box.id, bx + 5, by + 20);
 
         if (isSelected) {
-          // Draw Handles
           ctx.fillStyle = "#FFFFFF";
           const handles = this.getHandles(bx, by, bw, bh);
           for (let h of handles) {
@@ -333,11 +351,10 @@ app.registerExtension({
         }
       };
 
-      // Draw non-selected
       boxes.forEach((b) => {
         if (b.id !== this.boxState.selectedBoxId) drawBox(b, false);
       });
-      // Draw selected
+
       const selectedBox = boxes.find((b) => b.id === this.boxState.selectedBoxId);
       if (selectedBox) drawBox(selectedBox, true);
 
@@ -350,7 +367,6 @@ app.registerExtension({
         { name: "tr", x: bx + bw - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
         { name: "bl", x: bx - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
         { name: "br", x: bx + bw - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
-        // edge centers?
         { name: "tm", x: bx + bw / 2 - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
         { name: "bm", x: bx + bw / 2 - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
         { name: "lm", x: bx - HANDLE_SIZE / 2, y: by + bh / 2 - HANDLE_SIZE / 2 },
@@ -363,7 +379,6 @@ app.registerExtension({
 
       const [mouseX, mouseY] = localPos;
 
-      // Check handles of selected box first
       if (this.boxState.selectedBoxId) {
         const box = this.boxState.boxes.find((b) => b.id === this.boxState.selectedBoxId);
         if (box) {
@@ -386,8 +401,6 @@ app.registerExtension({
         }
       }
 
-      // Check click on boxes (selection / drag)
-      // Iterate reverse to select top-most
       for (let i = this.boxState.boxes.length - 1; i >= 0; i--) {
         const box = this.boxState.boxes[i];
         const bx = this.displayBounds.startX + box.x * this.displayBounds.scaleX;
@@ -403,22 +416,13 @@ app.registerExtension({
           this.boxState.initialBox = { ...box };
 
           if (this.updatePropertyWidgets) this.updatePropertyWidgets();
-
           this.setDirtyCanvas(true, true);
-          return true; // Capture
+          return true;
         }
       }
 
-      // Deselect if clicked outside
       if (this.boxState.selectedBoxId) {
         this.boxState.selectedBoxId = null;
-        // Maybe clear widgets or disable them?
-        // For now let's just leave last value or set defaults?
-        // Setting to defaults might be less confusing than showing values of unselected box.
-        // But we don't know what defaults to set.
-        // Actually, let's just keep them as is (showing last selected) or we could block edits.
-        // Ideally we gray them out.
-
         this.setDirtyCanvas(true, true);
       }
 
@@ -428,8 +432,6 @@ app.registerExtension({
     nodeType.prototype.onMouseMove = function (e, localPos, canvas) {
       if (!this.boxState.isDragging && !this.boxState.isResizing) return;
 
-      // Safety check: if no mouse buttons are pressed, stop dragging
-      // (1 is left button)
       if (e.buttons !== undefined && (e.buttons & 1) === 0) {
         this.boxState.isDragging = false;
         this.boxState.isResizing = false;
@@ -487,7 +489,6 @@ app.registerExtension({
           newH = Math.max(MIN_BOX_SIZE, initial.h + dy);
         }
 
-        // Constrain to canvas
         if (newX < 0) {
           newW += newX;
           newX = 0;

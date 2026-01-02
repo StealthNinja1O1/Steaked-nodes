@@ -5,7 +5,12 @@ from .texture_generator import NebulaGenerator
 from .edge_detection import EdgeDetection
 from .blend import ImageBlender
 from .halftone import HalftoneEffect
-from .regional_prompts import RegionalPromptsLatent, RegionalPromptsAttention, RegionalPromptsAttentionExperimental
+from .regional_prompts import (
+    RegionalPromptsLatent,
+    RegionalPromptsAttention,
+    RegionalPromptsLatentImg2Img,
+    RegionalPromptsAttentionImg2Img,
+)
 
 NODE_CLASS_MAPPINGS = {
     "LoadAndCrop": ImageCrop,
@@ -15,10 +20,10 @@ NODE_CLASS_MAPPINGS = {
     "EdgeDetection": EdgeDetection,
     "ImageBlender": ImageBlender,
     "HalftoneEffect": HalftoneEffect,
-    "HalftoneEffect": HalftoneEffect,
     "RegionalPromptsLatent": RegionalPromptsLatent,
     "RegionalPromptsAttention": RegionalPromptsAttention,
-    "RegionalPromptsAttentionExperimental": RegionalPromptsAttentionExperimental,
+    "RegionalPromptsLatentImg2Img": RegionalPromptsLatentImg2Img,
+    "RegionalPromptsAttentionImg2Img": RegionalPromptsAttentionImg2Img,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -30,7 +35,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "HalftoneEffect": "Halftone Effect",
     "RegionalPromptsLatent": "Regional Prompts (Latent)",
     "RegionalPromptsAttention": "Regional Prompts (Attention)",
-    "RegionalPromptsAttentionExperimental": "Regional Prompts (Attention Experimental)",
+    "RegionalPromptsLatentImg2Img": "Regional Prompts (Latent Img2Img)",
+    "RegionalPromptsAttentionImg2Img": "Regional Prompts (Attention Img2Img)",
 }
 
 WEB_DIRECTORY = "./web/"
