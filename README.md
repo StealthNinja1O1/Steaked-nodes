@@ -165,31 +165,31 @@ Apply retro printing and dithering effects.
 
 ### 8. **Regional Prompts** (`RegionalPromptsLatent`, `RegionalPromptsAttention`)
 
-Define up to 4 rectangular regions on a canvas to apply different prompts to specific areas.
+Define up to 4 rectangular regions on a canvas to apply different prompts to specific areas of an image. Each region has its own prompt, weight, and timestep scheduling.
 
 **Two Variants:**
 
-1. **Regional Prompts (Latent)**: Uses latent masking (separates generation per area). Better isolation, but slower and may have seams.
-2. **Regional Prompts (Attention)**: Uses attention coupling (modifies attention map). Faster and more coherent blending, but "bleeding" can occur. I recommend this version
+1. **Regional Prompts (Latent)** - Uses ComfyUI's standard latent masking mechanism. Each regional prompt is encoded separately and combined with masks. Better isolation between regions, but may have visible seams at boundaries.
+
+2. **Regional Prompts (Attention)** - Uses attention hooks to modify the attention computation during sampling. Faster with more coherent blending, but some "bleeding" between regions may occur. **Recommended for most use cases.**
 
 **Features:**
 
-- **Interactive Canvas**: Drag to move boxes, drag edges/corners to resize.
-- **Advanced Control**:
-  - **Weight**: Strength of the mask/region.
-  - **Feather**: Softness of edges.
-  - **Start/End Step**: Control when the regional prompt is active during generation (e.g., `0.0` to `0.4`).
-- **Scheduling**: Supports step-based scheduling logic automatically.
+- **Interactive Canvas**: Drag boxes to move, drag edges/corners to resize
+- **Per-Region Controls**:
+  - **Weight** (0.0-2.0): Strength multiplier for the region's influence
+  - **Start/End** (0.0-1.0): Timestep range when the regional prompt is active
+    - `Start`: When the prompt begins affecting generation (0.0 = first step)
+    - `End`: When the prompt stops affecting generation (1.0 = last step)
+    - Example: `Start: 0.0, End: 0.3` applies the prompt only during the first 30% of sampling
+- **Automatic Mask Handling**: Overlapping regions are automatically normalized
+- **Base Prompt Fill**: Unmasked areas are automatically filled with the base prompt
 
 **Inputs:**
 
-- `base_prompt`: The main prompt for the whole image (or unmasked areas).
-- `prompt_1` to `prompt_4`: Prompts corresponding to the 4 boxes.
-- `width`/`height`: Canvas dimensions.
-- `clip`: CLIP model.
-
-**Requirements:**
-
-- Requires **[ComfyUI-Prompt-Control](https://github.com/asagi4/comfyui-prompt-control)** to be installed.
+- `base_prompt`: Main prompt applied everywhere (or as fallback for unmasked areas)
+- `prompt_1` to `prompt_4`: Prompts for each of the 4 available boxes
+- `width`/`height`: Canvas dimensions in pixels
+- `clip`: CLIP model for text encoding
 
 ---

@@ -83,7 +83,6 @@ app.registerExtension({
 
       // Property Widgets for Selected Box
       addPropWidget("Weight", "number", 1.0, (box, v) => (box.weight = v), { min: 0, max: 2, step: 0.1, precision: 2 });
-      addPropWidget("Feather", "number", 0, (box, v) => (box.feather = v), { min: 0, max: 100, step: 1, precision: 0 });
       addPropWidget("Start Step", "number", 0.0, (box, v) => (box.start = v), {
         min: 0,
         max: 1,
@@ -126,7 +125,6 @@ app.registerExtension({
           const box = this.boxState.boxes.find((b) => b.id === id);
           if (box) {
             this.propWidgets["Weight"].value = box.weight !== undefined ? box.weight : 1.0;
-            this.propWidgets["Feather"].value = box.feather !== undefined ? box.feather : 0;
             this.propWidgets["Start Step"].value = box.start !== undefined ? box.start : 0.0;
             this.propWidgets["End Step"].value = box.end !== undefined ? box.end : 1.0;
           }
@@ -187,7 +185,6 @@ app.registerExtension({
         w: boxSize,
         h: boxSize,
         weight: 1.0,
-        feather: 0,
         start: 0.0,
         end: 1.0,
       });
