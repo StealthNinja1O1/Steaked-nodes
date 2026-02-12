@@ -140,10 +140,19 @@ class RegionalPromptsLatent:
             weight = float(box.get("weight", 1.0))
             start = float(box.get("start", 0.0))
             end = float(box.get("end", 1.0))
+            locked = bool(box.get("locked", True))
+            corners = box.get("corners", None)
+            
+            # Convert corners to proper format if present
+            if corners and isinstance(corners, list) and len(corners) == 4:
+                corners = [[float(c[0]), float(c[1])] for c in corners]
+            else:
+                corners = None
 
             regional_prompts.append(RegionalPromptData(
                 prompt_text=prompt_text, x=x, y=y, w=w, h=h,
                 weight=weight, start=start, end=end,
+                corners=corners, locked=locked,
             ))
 
         log.info(f"RegionalPromptsLatent: base='{base}', regions={len(regional_prompts)}")
@@ -228,10 +237,19 @@ class RegionalPromptsAttention:
             weight = float(box.get("weight", 1.0))
             start = float(box.get("start", 0.0))
             end = float(box.get("end", 1.0))
+            locked = bool(box.get("locked", True))
+            corners = box.get("corners", None)
+            
+            # Convert corners to proper format if present
+            if corners and isinstance(corners, list) and len(corners) == 4:
+                corners = [[float(c[0]), float(c[1])] for c in corners]
+            else:
+                corners = None
 
             regional_prompts.append(RegionalPromptData(
                 prompt_text=prompt_text, x=x, y=y, w=w, h=h,
                 weight=weight, start=start, end=end,
+                corners=corners, locked=locked,
             ))
 
         log.info(f"RegionalPromptsAttention: base='{base}', regions={len(regional_prompts)}")
@@ -322,10 +340,19 @@ class RegionalPromptsLatentImg2Img:
             weight = float(box.get("weight", 1.0))
             start = float(box.get("start", 0.0))
             end = float(box.get("end", 1.0))
+            locked = bool(box.get("locked", True))
+            corners = box.get("corners", None)
+            
+            # Convert corners to proper format if present
+            if corners and isinstance(corners, list) and len(corners) == 4:
+                corners = [[float(c[0]), float(c[1])] for c in corners]
+            else:
+                corners = None
 
             regional_prompts.append(RegionalPromptData(
                 prompt_text=prompt_text, x=x, y=y, w=w, h=h,
                 weight=weight, start=start, end=end,
+                corners=corners, locked=locked,
             ))
 
         log.info(f"RegionalPromptsLatentImg2Img: base='{base}', regions={len(regional_prompts)}")
@@ -418,10 +445,19 @@ class RegionalPromptsAttentionImg2Img:
             weight = float(box.get("weight", 1.0))
             start = float(box.get("start", 0.0))
             end = float(box.get("end", 1.0))
+            locked = bool(box.get("locked", True))
+            corners = box.get("corners", None)
+            
+            # Convert corners to proper format if present
+            if corners and isinstance(corners, list) and len(corners) == 4:
+                corners = [[float(c[0]), float(c[1])] for c in corners]
+            else:
+                corners = None
 
             regional_prompts.append(RegionalPromptData(
                 prompt_text=prompt_text, x=x, y=y, w=w, h=h,
                 weight=weight, start=start, end=end,
+                corners=corners, locked=locked,
             ))
 
         log.info(f"RegionalPromptsAttentionImg2Img: base='{base}', regions={len(regional_prompts)}")

@@ -255,19 +255,74 @@ def ensure_mask(c, mask_size=(512, 512)):
 
 
 class RegionalPromptData:
-    def __init__(self, prompt_text: str, x: float, y: float, w: float, h: float,
-                 weight: float = 1.0, start: float = 0.0, end: float = 1.0):
+    def __init__(self, prompt_text: str, x: float = 0, y: float = 0, w: float = 0, h: float = 0,
+                 weight: float = 1.0, start: float = 0.0, end: float = 1.0,
+                 corners: list = None, locked: bool = True):
         self.prompt_text = prompt_text
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
+        self.locked = locked
+        self.corners = corners  # [(x1,y1), (x2,y2), (x3,y3), (x4,y4)] TL, TR, BR, BL
+        
+        if corners and len(corners) == 4:
+            # Calculate bounding box from corners for compatibility
+            xs = [c[0] for c in corners]
+            ys = [c[1] for c in corners]
+            self.x = min(xs)
+            self.y = min(ys)
+            self.w = max(xs) - min(xs)
+            self.h = max(ys) - min(ys)
+        else:
+            # Use provided rectangle
+            self.x = x
+            self.y = y
+            self.w = w
+            self.h = h
+            # Generate corners from rectangle if not provided
+            if not corners:
+                self.corners = [
+                    [x, y],           # TL
+                    [x + w, y],       # TR
+                    [x + w, y + h],   # BR
+                    [x, y + h]        # BL
+                ]
+        
         self.weight = weight
         self.start = start
         self.end = end
 
 
+def create_mask_from_polygon(corners, image_width, image_height, weight, mask_size):
+    """Create mask from arbitrary quadrilateral defined by 4 corners."""
+    from PIL import Image, ImageDraw
+    import numpy as np
+    
+    mask_w, mask_h = mask_size
+    
+    # Scale corners to mask size
+    scaled_corners = [
+        (int(x * mask_w / image_width), int(y * mask_h / image_height))
+        for x, y in corners
+    ]
+    
+    # Clamp to mask bounds
+    scaled_corners = [
+        (max(0, min(x, mask_w - 1)), max(0, min(y, mask_h - 1)))
+        for x, y in scaled_corners
+    ]
+    
+    # Use PIL to rasterize polygon
+    img = Image.new('L', (mask_w, mask_h), 0)
+    ImageDraw.Draw(img).polygon(scaled_corners, fill=int(weight * 255))
+    
+    # Convert to torch tensor
+    mask_array = np.array(img).astype(np.float32) / 255.0
+    mask = torch.from_numpy(mask_array)
+    mask = mask.unsqueeze(0)
+    
+    return mask
+
+
 def create_mask_from_region(x, y, w, h, image_width, image_height, weight, mask_size):
+    """Create mask from rectangular region (backward compatibility)."""
     mask_w, mask_h = mask_size
 
     x1 = int(x * mask_w / image_width)
@@ -309,10 +364,17 @@ def encode_regional_prompts_direct(
             if not region.prompt_text.strip():
                 continue
 
-            mask = create_mask_from_region(
-                region.x, region.y, region.w, region.h,
-                width, height, region.weight, mask_size
-            )
+            # Use polygon mask if corners provided and not locked, otherwise rectangular
+            if region.corners and not region.locked:
+                mask = create_mask_from_polygon(
+                    region.corners,
+                    width, height, region.weight, mask_size
+                )
+            else:
+                mask = create_mask_from_region(
+                    region.x, region.y, region.w, region.h,
+                    width, height, region.weight, mask_size
+                )
 
             tokens = clip.tokenize(region.prompt_text)
             cond = clip.encode_from_tokens(tokens, return_dict=True)
@@ -340,10 +402,17 @@ def encode_regional_prompts_direct(
             if not region.prompt_text.strip():
                 continue
 
-            mask = create_mask_from_region(
-                region.x, region.y, region.w, region.h,
-                width, height, region.weight, mask_size
-            )
+            # Use polygon mask if corners provided and not locked, otherwise rectangular
+            if region.corners and not region.locked:
+                mask = create_mask_from_polygon(
+                    region.corners,
+                    width, height, region.weight, mask_size
+                )
+            else:
+                mask = create_mask_from_region(
+                    region.x, region.y, region.w, region.h,
+                    width, height, region.weight, mask_size
+                )
 
             tokens = clip.tokenize(region.prompt_text)
             cond = clip.encode_from_tokens(tokens, return_dict=True)

@@ -92,6 +92,10 @@ app.registerExtension({
         precision: 2,
       });
       addPropWidget("End Step", "number", 1.0, (box, v) => (box.end = v), { min: 0, max: 1, step: 0.01, precision: 2 });
+      addPropWidget("Unlock Shape", "toggle", false, (box, v) => {
+        box.locked = !v;
+        this.setDirtyCanvas(true, true);
+      });
 
       // Buttons
       this.addWidget("button", "Add Box (+)", null, () => {
@@ -128,6 +132,7 @@ app.registerExtension({
             this.propWidgets["Weight"].value = box.weight !== undefined ? box.weight : 1.0;
             this.propWidgets["Start Step"].value = box.start !== undefined ? box.start : 0.0;
             this.propWidgets["End Step"].value = box.end !== undefined ? box.end : 1.0;
+            this.propWidgets["Unlock Shape"].value = box.locked !== undefined ? !box.locked : false;
           }
         }
       };
@@ -160,6 +165,26 @@ app.registerExtension({
         if (boxDataWidget && boxDataWidget.value) {
           try {
             this.boxState.boxes = JSON.parse(boxDataWidget.value);
+            
+            // Ensure backwards compatibility - generate corners if missing
+            this.boxState.boxes.forEach(box => {
+              if (!box.corners || box.corners.length !== 4) {
+                const x = box.x || 0;
+                const y = box.y || 0;
+                const w = box.w || 100;
+                const h = box.h || 100;
+                box.corners = [
+                  [x, y],           // TL
+                  [x + w, y],       // TR
+                  [x + w, y + h],   // BR
+                  [x, y + h]        // BL
+                ];
+              }
+              if (box.locked === undefined) {
+                box.locked = true;
+              }
+            });
+            
             this.setDirtyCanvas(true, true);
           } catch (e) {
             console.error("RegionalPrompts: Failed to restore boxes", e);
@@ -221,6 +246,13 @@ app.registerExtension({
         weight: 1.0,
         start: 0.0,
         end: 1.0,
+        locked: true,
+        corners: [
+          [offset, offset],                   // TL
+          [offset + boxSize, offset],         // TR
+          [offset + boxSize, offset + boxSize], // BR
+          [offset, offset + boxSize]          // BL
+        ]
       });
       this.boxState.selectedBoxId = newId;
       if (this.updatePropertyWidgets) this.updatePropertyWidgets();
@@ -325,29 +357,61 @@ app.registerExtension({
       const boxes = this.boxState.boxes;
 
       const drawBox = (box, isSelected) => {
-        const bx = startX + box.x * this.displayBounds.scaleX;
-        const by = startY + box.y * this.displayBounds.scaleY;
-        const bw = box.w * this.displayBounds.scaleX;
-        const bh = box.h * this.displayBounds.scaleY;
-
         const color = BOX_COLORS[box.id] || "#FFFFFF";
-
+        
+        // Get display corners
+        const getDisplayCorners = (box) => {
+          if (!box.corners || box.corners.length !== 4) {
+            // Fallback to rectangle
+            const bx = startX + box.x * this.displayBounds.scaleX;
+            const by = startY + box.y * this.displayBounds.scaleY;
+            const bw = box.w * this.displayBounds.scaleX;
+            const bh = box.h * this.displayBounds.scaleY;
+            return [
+              [bx, by], [bx + bw, by], [bx + bw, by + bh], [bx, by + bh]
+            ];
+          }
+          return box.corners.map(c => [
+            startX + c[0] * this.displayBounds.scaleX,
+            startY + c[1] * this.displayBounds.scaleY
+          ]);
+        };
+        
+        const displayCorners = getDisplayCorners(box);
+        
+        // Draw filled polygon
         ctx.globalAlpha = 0.3;
         ctx.fillStyle = color;
-        ctx.fillRect(bx, by, bw, bh);
+        ctx.beginPath();
+        ctx.moveTo(displayCorners[0][0], displayCorners[0][1]);
+        for (let i = 1; i < displayCorners.length; i++) {
+          ctx.lineTo(displayCorners[i][0], displayCorners[i][1]);
+        }
+        ctx.closePath();
+        ctx.fill();
 
+        // Draw outline
         ctx.globalAlpha = 1.0;
         ctx.strokeStyle = isSelected ? "#FFFFFF" : color;
         ctx.lineWidth = isSelected ? 2 : 1;
-        ctx.strokeRect(bx, by, bw, bh);
+        ctx.beginPath();
+        ctx.moveTo(displayCorners[0][0], displayCorners[0][1]);
+        for (let i = 1; i < displayCorners.length; i++) {
+          ctx.lineTo(displayCorners[i][0], displayCorners[i][1]);
+        }
+        ctx.closePath();
+        ctx.stroke();
 
+        // Draw box ID label at center
+        const centerX = displayCorners.reduce((sum, c) => sum + c[0], 0) / displayCorners.length;
+        const centerY = displayCorners.reduce((sum, c) => sum + c[1], 0) / displayCorners.length;
         ctx.fillStyle = "#FFFFFF";
         ctx.font = "bold 16px Arial";
-        ctx.fillText(box.id, bx + 5, by + 20);
+        ctx.fillText(box.id, centerX - 5, centerY + 5);
 
         if (isSelected) {
           ctx.fillStyle = "#FFFFFF";
-          const handles = this.getHandles(bx, by, bw, bh);
+          const handles = this.getHandles(box, displayCorners);
           for (let h of handles) {
             ctx.fillRect(h.x, h.y, HANDLE_SIZE, HANDLE_SIZE);
           }
@@ -364,17 +428,56 @@ app.registerExtension({
       ctx.restore();
     };
 
-    nodeType.prototype.getHandles = function (bx, by, bw, bh) {
-      return [
-        { name: "tl", x: bx - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
-        { name: "tr", x: bx + bw - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
-        { name: "bl", x: bx - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
-        { name: "br", x: bx + bw - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
-        { name: "tm", x: bx + bw / 2 - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
-        { name: "bm", x: bx + bw / 2 - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
-        { name: "lm", x: bx - HANDLE_SIZE / 2, y: by + bh / 2 - HANDLE_SIZE / 2 },
-        { name: "rm", x: bx + bw - HANDLE_SIZE / 2, y: by + bh / 2 - HANDLE_SIZE / 2 },
-      ];
+    nodeType.prototype.getHandles = function (box, displayCorners) {
+      if (!box.locked) {
+        // Unlocked: 4 independent corner handles
+        return [
+          { name: "c0", x: displayCorners[0][0] - HANDLE_SIZE / 2, y: displayCorners[0][1] - HANDLE_SIZE / 2, cornerIndex: 0 },
+          { name: "c1", x: displayCorners[1][0] - HANDLE_SIZE / 2, y: displayCorners[1][1] - HANDLE_SIZE / 2, cornerIndex: 1 },
+          { name: "c2", x: displayCorners[2][0] - HANDLE_SIZE / 2, y: displayCorners[2][1] - HANDLE_SIZE / 2, cornerIndex: 2 },
+          { name: "c3", x: displayCorners[3][0] - HANDLE_SIZE / 2, y: displayCorners[3][1] - HANDLE_SIZE / 2, cornerIndex: 3 },
+        ];
+      } else {
+        // Locked: 8 rectangle handles
+        const bx = displayCorners[0][0];
+        const by = displayCorners[0][1];
+        const bw = displayCorners[1][0] - displayCorners[0][0];
+        const bh = displayCorners[3][1] - displayCorners[0][1];
+        
+        return [
+          { name: "tl", x: bx - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
+          { name: "tr", x: bx + bw - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
+          { name: "bl", x: bx - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
+          { name: "br", x: bx + bw - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
+          { name: "tm", x: bx + bw / 2 - HANDLE_SIZE / 2, y: by - HANDLE_SIZE / 2 },
+          { name: "bm", x: bx + bw / 2 - HANDLE_SIZE / 2, y: by + bh - HANDLE_SIZE / 2 },
+          { name: "lm", x: bx - HANDLE_SIZE / 2, y: by + bh / 2 - HANDLE_SIZE / 2 },
+          { name: "rm", x: bx + bw - HANDLE_SIZE / 2, y: by + bh / 2 - HANDLE_SIZE / 2 },
+        ];
+      }
+    };
+
+    // Point in polygon detection using ray casting
+    nodeType.prototype.isPointInPolygon = function (x, y, corners) {
+      let inside = false;
+      for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+        const xi = corners[i][0], yi = corners[i][1];
+        const xj = corners[j][0], yj = corners[j][1];
+        
+        const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    };
+
+    // Update bounding box from corners
+    nodeType.prototype.updateBoxBounds = function (box) {
+      const xs = box.corners.map(c => c[0]);
+      const ys = box.corners.map(c => c[1]);
+      box.x = Math.min(...xs);
+      box.y = Math.min(...ys);
+      box.w = Math.max(...xs) - box.x;
+      box.h = Math.max(...ys) - box.y;
     };
 
     nodeType.prototype.onMouseDown = function (e, localPos, canvas) {
@@ -385,19 +488,21 @@ app.registerExtension({
       if (this.boxState.selectedBoxId) {
         const box = this.boxState.boxes.find((b) => b.id === this.boxState.selectedBoxId);
         if (box) {
-          const bx = this.displayBounds.startX + box.x * this.displayBounds.scaleX;
-          const by = this.displayBounds.startY + box.y * this.displayBounds.scaleY;
-          const bw = box.w * this.displayBounds.scaleX;
-          const bh = box.h * this.displayBounds.scaleY;
+          // Compute display corners for handle detection
+          const displayCorners = box.corners.map(([cx, cy]) => [
+            this.displayBounds.startX + cx * this.displayBounds.scaleX,
+            this.displayBounds.startY + cy * this.displayBounds.scaleY,
+          ]);
 
-          const handles = this.getHandles(bx, by, bw, bh);
+          const handles = this.getHandles(box, displayCorners);
           for (let h of handles) {
             if (mouseX >= h.x && mouseX <= h.x + HANDLE_SIZE && mouseY >= h.y && mouseY <= h.y + HANDLE_SIZE) {
               this.boxState.isResizing = true;
               this.boxState.dragHandle = h.name;
+              this.boxState.dragHandleCornerIndex = h.cornerIndex; // For unlocked shapes
               this.boxState.dragStartX = mouseX;
               this.boxState.dragStartY = mouseY;
-              this.boxState.initialBox = { ...box };
+              this.boxState.initialBox = { ...box, corners: box.corners.map(c => [...c]) };
               return true;
             }
           }
@@ -406,17 +511,20 @@ app.registerExtension({
 
       for (let i = this.boxState.boxes.length - 1; i >= 0; i--) {
         const box = this.boxState.boxes[i];
-        const bx = this.displayBounds.startX + box.x * this.displayBounds.scaleX;
-        const by = this.displayBounds.startY + box.y * this.displayBounds.scaleY;
-        const bw = box.w * this.displayBounds.scaleX;
-        const bh = box.h * this.displayBounds.scaleY;
+        
+        // Compute display corners
+        const displayCorners = box.corners.map(([cx, cy]) => [
+          this.displayBounds.startX + cx * this.displayBounds.scaleX,
+          this.displayBounds.startY + cy * this.displayBounds.scaleY,
+        ]);
 
-        if (mouseX >= bx && mouseX <= bx + bw && mouseY >= by && mouseY <= by + bh) {
+        // Check if mouse is inside the polygon
+        if (this.isPointInPolygon(mouseX, mouseY, displayCorners)) {
           this.boxState.selectedBoxId = box.id;
           this.boxState.isDragging = true;
           this.boxState.dragStartX = mouseX;
           this.boxState.dragStartY = mouseY;
-          this.boxState.initialBox = { ...box };
+          this.boxState.initialBox = { ...box, corners: box.corners.map(c => [...c]) };
 
           if (this.updatePropertyWidgets) this.updatePropertyWidgets();
           this.setDirtyCanvas(true, true);
@@ -456,8 +564,14 @@ app.registerExtension({
         const dx = (mouseX - this.boxState.dragStartX) / scaleX;
         const dy = (mouseY - this.boxState.dragStartY) / scaleY;
 
-        box.x = Math.max(0, Math.min(this.boxState.initialBox.x + dx, this.boxState.canvasWidth - box.w));
-        box.y = Math.max(0, Math.min(this.boxState.initialBox.y + dy, this.boxState.canvasHeight - box.h));
+        // Move all corners by the same offset
+        box.corners = this.boxState.initialBox.corners.map(([cx, cy]) => [
+          Math.max(0, Math.min(cx + dx, this.boxState.canvasWidth)),
+          Math.max(0, Math.min(cy + dy, this.boxState.canvasHeight)),
+        ]);
+        
+        // Update bounding box
+        this.updateBoxBounds(box);
 
         this.saveBoxData();
         this.setDirtyCanvas(true, true);
@@ -469,44 +583,69 @@ app.registerExtension({
 
         const dx = (mouseX - this.boxState.dragStartX) / scaleX;
         const dy = (mouseY - this.boxState.dragStartY) / scaleY;
-        const initial = this.boxState.initialBox;
-        const handle = this.boxState.dragHandle;
 
-        let newX = initial.x;
-        let newY = initial.y;
-        let newW = initial.w;
-        let newH = initial.h;
+        if (!box.locked) {
+          // Unlocked: Move individual corner
+          const cornerIndex = this.boxState.dragHandleCornerIndex;
+          if (cornerIndex !== undefined) {
+            const initial = this.boxState.initialBox.corners[cornerIndex];
+            box.corners[cornerIndex] = [
+              Math.max(0, Math.min(initial[0] + dx, this.boxState.canvasWidth)),
+              Math.max(0, Math.min(initial[1] + dy, this.boxState.canvasHeight)),
+            ];
+            
+            // Update bounding box
+            this.updateBoxBounds(box);
+          }
+        } else {
+          // Locked: Rectangle resize
+          const initial = this.boxState.initialBox;
+          const handle = this.boxState.dragHandle;
 
-        if (handle.includes("l")) {
-          newX = Math.min(initial.x + initial.w - MIN_BOX_SIZE, initial.x + dx);
-          newW = initial.w + (initial.x - newX);
-        }
-        if (handle.includes("r")) {
-          newW = Math.max(MIN_BOX_SIZE, initial.w + dx);
-        }
-        if (handle.includes("t")) {
-          newY = Math.min(initial.y + initial.h - MIN_BOX_SIZE, initial.y + dy);
-          newH = initial.h + (initial.y - newY);
-        }
-        if (handle.includes("b")) {
-          newH = Math.max(MIN_BOX_SIZE, initial.h + dy);
-        }
+          let newX = initial.x;
+          let newY = initial.y;
+          let newW = initial.w;
+          let newH = initial.h;
 
-        if (newX < 0) {
-          newW += newX;
-          newX = 0;
-        }
-        if (newY < 0) {
-          newH += newY;
-          newY = 0;
-        }
-        if (newX + newW > this.boxState.canvasWidth) newW = this.boxState.canvasWidth - newX;
-        if (newY + newH > this.boxState.canvasHeight) newH = this.boxState.canvasHeight - newY;
+          if (handle.includes("l")) {
+            newX = Math.min(initial.x + initial.w - MIN_BOX_SIZE, initial.x + dx);
+            newW = initial.w + (initial.x - newX);
+          }
+          if (handle.includes("r")) {
+            newW = Math.max(MIN_BOX_SIZE, initial.w + dx);
+          }
+          if (handle.includes("t")) {
+            newY = Math.min(initial.y + initial.h - MIN_BOX_SIZE, initial.y + dy);
+            newH = initial.h + (initial.y - newY);
+          }
+          if (handle.includes("b")) {
+            newH = Math.max(MIN_BOX_SIZE, initial.h + dy);
+          }
 
-        box.x = Math.max(0, newX);
-        box.y = Math.max(0, newY);
-        box.w = Math.max(MIN_BOX_SIZE, newW);
-        box.h = Math.max(MIN_BOX_SIZE, newH);
+          if (newX < 0) {
+            newW += newX;
+            newX = 0;
+          }
+          if (newY < 0) {
+            newH += newY;
+            newY = 0;
+          }
+          if (newX + newW > this.boxState.canvasWidth) newW = this.boxState.canvasWidth - newX;
+          if (newY + newH > this.boxState.canvasHeight) newH = this.boxState.canvasHeight - newY;
+
+          box.x = Math.max(0, newX);
+          box.y = Math.max(0, newY);
+          box.w = Math.max(MIN_BOX_SIZE, newW);
+          box.h = Math.max(MIN_BOX_SIZE, newH);
+          
+          // Update corners to match the rectangle
+          box.corners = [
+            [box.x, box.y],           // TL
+            [box.x + box.w, box.y],   // TR
+            [box.x + box.w, box.y + box.h], // BR
+            [box.x, box.y + box.h],   // BL
+          ];
+        }
 
         this.saveBoxData();
         this.setDirtyCanvas(true, true);
