@@ -23,7 +23,7 @@ class DanbooruProxy:
         self.request_times = []
         self.cache_ttl = timedelta(hours=1)
         self.rate_limit = 2  # requests per second
-        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
+        self.user_agent = "ComfyUI Danbooru Proxy/1.0"
         
     def check_rate_limit(self) -> bool:
         """Check if we're within Danbooru's rate limit (2 req/sec for anonymous)"""
