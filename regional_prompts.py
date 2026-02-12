@@ -121,6 +121,7 @@ class RegionalPromptsLatent:
 
         regional_prompts = []
         prompts_map = {1: prompt_1, 2: prompt_2, 3: prompt_3, 4: prompt_4}
+        base = clean_prompt(base_prompt)
 
         for box in boxes:
             box_id = int(box.get("id", 0))
@@ -128,6 +129,10 @@ class RegionalPromptsLatent:
                 continue
 
             prompt_text = clean_prompt(prompts_map[box_id])
+            # Prepend base prompt to ensure it's always included
+            if base:
+                prompt_text = f"{base}, {prompt_text}"
+            
             x = float(box.get("x", 0))
             y = float(box.get("y", 0))
             w = float(box.get("w", 0))
@@ -141,7 +146,6 @@ class RegionalPromptsLatent:
                 weight=weight, start=start, end=end,
             ))
 
-        base = clean_prompt(base_prompt)
         log.info(f"RegionalPromptsLatent: base='{base}', regions={len(regional_prompts)}")
         for i, rp in enumerate(regional_prompts):
             log.info(f"  Region {i+1}: '{rp.prompt_text}' @ ({rp.x},{rp.y},{rp.w},{rp.h}) w={rp.weight} start={rp.start} end={rp.end}")
@@ -205,6 +209,7 @@ class RegionalPromptsAttention:
 
         regional_prompts = []
         prompts_map = {1: prompt_1, 2: prompt_2, 3: prompt_3, 4: prompt_4}
+        base = clean_prompt(base_prompt)
 
         for box in boxes:
             box_id = int(box.get("id", 0))
@@ -212,6 +217,10 @@ class RegionalPromptsAttention:
                 continue
 
             prompt_text = clean_prompt(prompts_map[box_id])
+            # Prepend base prompt to ensure it's always included
+            if base:
+                prompt_text = f"{base}, {prompt_text}"
+            
             x = float(box.get("x", 0))
             y = float(box.get("y", 0))
             w = float(box.get("w", 0))
@@ -225,7 +234,6 @@ class RegionalPromptsAttention:
                 weight=weight, start=start, end=end,
             ))
 
-        base = clean_prompt(base_prompt)
         log.info(f"RegionalPromptsAttention: base='{base}', regions={len(regional_prompts)}")
         for i, rp in enumerate(regional_prompts):
             log.info(f"  Region {i+1}: '{rp.prompt_text}' @ ({rp.x},{rp.y},{rp.w},{rp.h}) w={rp.weight} start={rp.start} end={rp.end}")
@@ -295,6 +303,7 @@ class RegionalPromptsLatentImg2Img:
 
         regional_prompts = []
         prompts_map = {1: prompt_1, 2: prompt_2, 3: prompt_3, 4: prompt_4}
+        base = clean_prompt(base_prompt)
 
         for box in boxes:
             box_id = int(box.get("id", 0))
@@ -302,6 +311,10 @@ class RegionalPromptsLatentImg2Img:
                 continue
 
             prompt_text = clean_prompt(prompts_map[box_id])
+            # Prepend base prompt to ensure it's always included
+            if base:
+                prompt_text = f"{base}, {prompt_text}"
+            
             x = float(box.get("x", 0))
             y = float(box.get("y", 0))
             w = float(box.get("w", 0))
@@ -315,7 +328,6 @@ class RegionalPromptsLatentImg2Img:
                 weight=weight, start=start, end=end,
             ))
 
-        base = clean_prompt(base_prompt)
         log.info(f"RegionalPromptsLatentImg2Img: base='{base}', regions={len(regional_prompts)}")
         for i, rp in enumerate(regional_prompts):
             log.info(f"  Region {i+1}: '{rp.prompt_text}' @ ({rp.x},{rp.y},{rp.w},{rp.h}) w={rp.weight} start={rp.start} end={rp.end}")
@@ -387,6 +399,7 @@ class RegionalPromptsAttentionImg2Img:
 
         regional_prompts = []
         prompts_map = {1: prompt_1, 2: prompt_2, 3: prompt_3, 4: prompt_4}
+        base = clean_prompt(base_prompt)
 
         for box in boxes:
             box_id = int(box.get("id", 0))
@@ -394,6 +407,10 @@ class RegionalPromptsAttentionImg2Img:
                 continue
 
             prompt_text = clean_prompt(prompts_map[box_id])
+            # Prepend base prompt to ensure it's always included
+            if base:
+                prompt_text = f"{base}, {prompt_text}"
+            
             x = float(box.get("x", 0))
             y = float(box.get("y", 0))
             w = float(box.get("w", 0))
@@ -407,7 +424,6 @@ class RegionalPromptsAttentionImg2Img:
                 weight=weight, start=start, end=end,
             ))
 
-        base = clean_prompt(base_prompt)
         log.info(f"RegionalPromptsAttentionImg2Img: base='{base}', regions={len(regional_prompts)}")
         for i, rp in enumerate(regional_prompts):
             log.info(f"  Region {i+1}: '{rp.prompt_text}' @ ({rp.x},{rp.y},{rp.w},{rp.h}) w={rp.weight} start={rp.start} end={rp.end}")

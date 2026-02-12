@@ -1,12 +1,61 @@
 import { app } from "../../scripts/app.js";
+
 app.registerExtension({
   name: "Steaked.ColorBlender",
+  
+  async nodeCreated(node) {
+    // This is called after the graph is configured
+    // We'll handle execution results in the node's callback
+  },
+
   async beforeRegisterNodeDef(nodeType, nodeData, app) {
     if (nodeData.name !== "ColorBlender") return;
+
+    // Handle execution completion to load preview
+    const onExecuted = nodeType.prototype.onExecuted;
+    nodeType.prototype.onExecuted = function(message) {
+      if (onExecuted) {
+        onExecuted.apply(this, arguments);
+      }
+      
+      // Check if we received cached image data
+      if (message && message.cached_image && message.cached_image.length > 0) {
+        const filename = message.cached_image[0];
+        this.loadPreviewImage(filename, "temp");
+        
+        // Update the hidden widget
+        const cachedWidget = this.widgets?.find(w => w.name === "cached_image_path");
+        if (cachedWidget) {
+          cachedWidget.value = filename;
+        }
+      }
+    };
+    
+    // Handle loading from saved workflows
+    const onConfigure = nodeType.prototype.onConfigure;
+    nodeType.prototype.onConfigure = function(data) {
+      if (onConfigure) {
+        onConfigure.apply(this, arguments);
+      }
+      
+      // Try to load cached image if available
+      const cachedWidget = this.widgets?.find(w => w.name === "cached_image_path");
+      if (cachedWidget && cachedWidget.value) {
+        this.loadPreviewImage(cachedWidget.value, "temp");
+      }
+    };
 
     const onNodeCreated = nodeType.prototype.onNodeCreated;
     nodeType.prototype.onNodeCreated = function () {
       const r = onNodeCreated ? onNodeCreated.apply(this, arguments) : undefined;
+      
+      // Initialize preview state
+      this.previewImage = null;
+      this.previewCanvas = null;
+      
+      // Add preview canvas as a custom widget
+      this.addPreviewWidget();
+      
       // Find and enhance each widget
       for (let widget of this.widgets) {
         switch (widget.name) {
@@ -31,10 +80,363 @@ app.registerExtension({
           case "tint":
             this.enhanceTintWidget(widget);
             break;
+          case "invert":
+            this.enhanceInvertWidget(widget);
+            break;
+          case "cached_image_path":
+            // Hidden widget - hide it completely
+            widget.computeSize = () => [0, -4];
+            widget.type = "converted-widget";
+            break;
+        }
+        
+        // Wire up widgets to trigger preview updates (except hidden ones)
+        if (widget.name !== "cached_image_path") {
+          widget.callback = ((originalCallback) => {
+            return (value) => {
+              if (originalCallback) originalCallback(value);
+              this.updatePreview();
+            };
+          })(widget.callback);
         }
       }
+      
+      // Try to load cached preview if available
+      setTimeout(() => {
+        const cachedWidget = this.widgets?.find(w => w.name === "cached_image_path");
+        if (cachedWidget && cachedWidget.value) {
+          this.loadPreviewImage(cachedWidget.value, "temp");
+        }
+      }, 100);
 
       return r;
+    };
+    
+    // Add preview widget method
+    nodeType.prototype.addPreviewWidget = function() {
+      const widget = {
+        name: "preview_canvas",
+        type: "preview",
+        value: null,
+        draw: (ctx, node, width, y) => {
+          const previewHeight = 200;
+          const padding = 10;
+          const previewWidth = width - padding * 2;
+          const previewY = y;
+          
+          // Draw background
+          ctx.fillStyle = "#1a1a1a";
+          ctx.fillRect(padding, previewY, previewWidth, previewHeight);
+          
+          // Draw border
+          ctx.strokeStyle = "#444";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(padding, previewY, previewWidth, previewHeight);
+          
+          if (this.previewImage && this.previewImage.complete) {
+            // Create or get cached canvas for processing
+            if (!this.previewCanvas || 
+                this.previewCanvas.width !== this.previewImage.width || 
+                this.previewCanvas.height !== this.previewImage.height) {
+              this.previewCanvas = document.createElement('canvas');
+              this.previewCanvas.width = this.previewImage.width;
+              this.previewCanvas.height = this.previewImage.height;
+            }
+            
+            // Apply color effects to canvas
+            const pctx = this.previewCanvas.getContext('2d');
+            pctx.drawImage(this.previewImage, 0, 0);
+            
+            // Apply effects
+            this.applyColorEffects(pctx);
+            
+            // Calculate scaling to fit preview  area
+            const scale = Math.min(
+              previewWidth / this.previewCanvas.width,
+              previewHeight / this.previewCanvas.height
+            );
+            const scaledWidth = this.previewCanvas.width * scale;
+            const scaledHeight = this.previewCanvas.height * scale;
+            const offsetX = padding + (previewWidth - scaledWidth) / 2;
+            const offsetY = previewY + (previewHeight - scaledHeight) / 2;
+            
+            // Draw processed image
+            ctx.drawImage(
+              this.previewCanvas,
+              offsetX, offsetY,
+              scaledWidth, scaledHeight
+            );
+          } else {
+            // Draw placeholder text
+            ctx.fillStyle = "#666";
+            ctx.font = "14px Arial";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(
+              "Connect an image input to see preview",
+              width / 2,
+              previewY + previewHeight / 2
+            );
+          }
+          
+          return previewHeight;
+        },
+        computeSize: (width) => {
+          return [width, 210]; // Height + padding
+        }
+      };
+      
+      this.addCustomWidget(widget);
+    };
+    
+    // Apply color effects to canvas (client-side approximation)
+    nodeType.prototype.applyColorEffects = function(ctx) {
+      const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+      const data = imageData.data;
+      
+      // Get widget values
+      const getWidgetValue = (name, defaultValue) => {
+        const widget = this.widgets.find(w => w.name === name);
+        return widget ? widget.value : defaultValue;
+      };
+      
+      const invert = getWidgetValue('invert', false);
+      const exposure = getWidgetValue('exposure', 0.0);
+      const temperature = getWidgetValue('temperature', 0.0);
+      const tint = getWidgetValue('tint', 0.0);
+      const highlights = getWidgetValue('highlights', 0.0);
+      const shadows = getWidgetValue('shadows', 0.0);
+      const blacks = getWidgetValue('blacks', 0.0);
+      const whites = getWidgetValue('whites', 0.0);
+      const contrast = getWidgetValue('contrast', 1.0);
+      const brightness = getWidgetValue('brightness', 0.0);
+      const hue = getWidgetValue('hue', 0.0);
+      const saturation = getWidgetValue('saturation', 1.0);
+      
+      // Process each pixel
+      for (let i = 0; i < data.length; i += 4) {
+        let r = data[i] / 255;
+        let g = data[i + 1] / 255;
+        let b = data[i + 2] / 255;
+        
+        // 1. Invert (first)
+        if (invert) {
+          r = 1.0 - r;
+          g = 1.0 - g;
+          b = 1.0 - b;
+        }
+        
+        // 2. Exposure
+        if (exposure !== 0.0) {
+          const multiplier = Math.pow(2.0, exposure);
+          r *= multiplier;
+          g *= multiplier;
+          b *= multiplier;
+        }
+        
+        // 3. Temperature
+        if (temperature !== 0.0) {
+          if (temperature > 0) {
+            r = r * (1.0 + temperature * 0.5);
+            b = b * (1.0 - temperature * 0.3);
+          } else {
+            r = r * (1.0 + temperature * 0.3);
+            b = b * (1.0 - temperature * 0.5);
+          }
+        }
+        
+        // 4. Tint
+        if (tint !== 0.0) {
+          if (tint > 0) {
+            g = g * (1.0 + tint * 0.5);
+          } else {
+            r = r * (1.0 - tint * 0.3);
+            b = b * (1.0 - tint * 0.3);
+          }
+        }
+        
+        // 5. Highlights and Shadows
+        if (highlights !== 0.0 || shadows !== 0.0) {
+          const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          
+          if (highlights !== 0.0) {
+            const highlightMask = Math.pow(Math.max(0, Math.min(1, (luma - 0.5) * 2.0)), 2);
+            r += highlights * highlightMask;
+            g += highlights * highlightMask;
+            b += highlights * highlightMask;
+          }
+          
+          if (shadows !== 0.0) {
+            const shadowMask = Math.pow(Math.max(0, Math.min(1, (0.5 - luma) * 2.0)), 2);
+            r += shadows * shadowMask;
+            g += shadows * shadowMask;
+            b += shadows * shadowMask;
+          }
+        }
+        
+        // 6. Blacks
+        if (blacks !== 0.0) {
+          r = r + blacks * (1.0 - r);
+          g = g + blacks * (1.0 - g);
+          b = b + blacks * (1.0 - b);
+        }
+        
+        // 7. Whites
+        if (whites !== 0.0) {
+          r = r + whites * r;
+          g = g + whites * g;
+          b = b + whites * b;
+        }
+        
+        // 8. Contrast
+        if (contrast !== 1.0) {
+          r = (r - 0.5) * contrast + 0.5;
+          g = (g - 0.5) * contrast + 0.5;
+          b = (b - 0.5) * contrast + 0.5;
+        }
+        
+        // 9. Brightness
+        if (brightness !== 0.0) {
+          r += brightness;
+          g += brightness;
+          b += brightness;
+        }
+        
+        // Clip before HSV
+        r = Math.max(0, Math.min(1, r));
+        g = Math.max(0, Math.min(1, g));
+        b = Math.max(0, Math.min(1, b));
+        
+        // 10. Hue and Saturation (HSV conversion)
+        if (hue !== 0.0 || saturation !== 1.0) {
+          const hsv = this.rgbToHsv(r, g, b);
+          
+          if (hue !== 0.0) {
+            hsv.h = (hsv.h + hue / 360.0) % 1.0;
+            if (hsv.h < 0) hsv.h += 1.0;
+          }
+          
+          if (saturation !== 1.0) {
+            hsv.s = Math.max(0, Math.min(1, hsv.s * saturation));
+          }
+          
+          const rgb = this.hsvToRgb(hsv.h, hsv.s, hsv.v);
+          r = rgb.r;
+          g = rgb.g;
+          b = rgb.b;
+        }
+        
+        // Final clip and convert back to 0-255
+        data[i] = Math.max(0, Math.min(255, r * 255));
+        data[i + 1] = Math.max(0, Math.min(255, g * 255));
+        data[i + 2] = Math.max(0, Math.min(255, b * 255));
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+    };
+    
+    // RGB to HSV conversion
+    nodeType.prototype.rgbToHsv = function(r, g, b) {
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      const delta = max - min;
+      
+      let h = 0;
+      const s = max === 0 ? 0 : delta / max;
+      const v = max;
+      
+      if (delta !== 0) {
+        if (max === r) {
+          h = ((g - b) / delta + (g < b ? 6 : 0)) / 6;
+        } else if (max === g) {
+          h = ((b - r) / delta + 2) / 6;
+        } else {
+          h = ((r - g) / delta + 4) / 6;
+        }
+      }
+      
+      return { h, s, v };
+    };
+    
+    // HSV to RGB conversion
+    nodeType.prototype.hsvToRgb = function(h, s, v) {
+      const i = Math.floor(h * 6);
+      const f = h * 6 - i;
+      const p = v * (1 - s);
+      const q = v * (1 - f * s);
+      const t = v * (1 - (1 - f) * s);
+      
+      let r, g, b;
+      switch (i % 6) {
+        case 0: r = v; g = t; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = t; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = t; g = p; b = v; break;
+        case 5: r = v; g = p; b = q; break;
+      }
+      
+      return { r, g, b };
+    };
+    
+    // Load preview image from filename
+    nodeType.prototype.loadPreviewImage = function(filename, type = "temp") {
+      if (!filename) return;
+      
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        this.previewImage = img;
+        this.updatePreview();
+      };
+      img.onerror = (e) => {
+        console.log("Failed to load preview image:", filename, e);
+        this.previewImage = null;
+      };
+      img.src = `/view?filename=${encodeURIComponent(filename)}&type=${type}&subfolder=`;
+    };
+    
+    // Trigger preview redraw
+    nodeType.prototype.updatePreview = function() {
+      if (this.previewImage) {
+        app.graph.setDirtyCanvas(true, true);
+      }
+    };
+    
+    // Enhance Invert widget 
+    nodeType.prototype.enhanceInvertWidget = function (widget) {
+      const originalDraw = widget.draw;
+      widget.draw = function (ctx, node, width, y, height) {
+        if (originalDraw) {
+          originalDraw.apply(this, arguments);
+        }
+        
+        // Add visual indicator for invert toggle
+        const labelText = "Invert Colors";
+        const labelX = 10;
+        const labelY = y + height / 2;
+        ctx.font = "12px Arial";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(labelText, labelX + 70, labelY);
+        
+        // Draw a small invert icon (black/white squares)
+        const iconSize = 16;
+        const iconX = labelX + 200;
+        const iconY = y + (height - iconSize) / 2;
+        
+        ctx.fillStyle = widget.value ? "#ffffff" : "#666666";
+        ctx.fillRect(iconX, iconY, iconSize / 2, iconSize / 2);
+        ctx.fillRect(iconX + iconSize / 2, iconY + iconSize / 2, iconSize / 2, iconSize / 2);
+        
+        ctx.fillStyle = widget.value ? "#000000" : "#333333";
+        ctx.fillRect(iconX + iconSize / 2, iconY, iconSize / 2, iconSize / 2);
+        ctx.fillRect(iconX, iconY + iconSize / 2, iconSize / 2, iconSize / 2);
+        
+        ctx.strokeStyle = "#666";
+        ctx.strokeRect(iconX, iconY, iconSize, iconSize);
+      };
     };
 
     // Enhance Hue widget with color gradient

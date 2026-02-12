@@ -1,5 +1,10 @@
 import torch
 import numpy as np
+import os
+import json
+import hashlib
+import folder_paths
+from PIL import Image
 
 
 class ColorBlender:
@@ -52,12 +57,18 @@ class ColorBlender:
                     "FLOAT",
                     {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01},
                 ),
-            }
+                "invert": ("BOOLEAN", {"default": False}),
+            },
+            "hidden": {
+                "cached_image_path": ("STRING", {"default": ""}),
+            },
         }
 
     RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
     FUNCTION = "blend_colors"
     CATEGORY = "Steaked-nodes/tools"
+    OUTPUT_NODE = True
 
     def rgb_to_hsv(self, rgb):
         """Convert RGB to HSV color space"""
@@ -117,16 +128,39 @@ class ColorBlender:
         whites,
         highlights,
         shadows,
+        invert,
+        cached_image_path="",
     ):
 
         B, H, W, C = image.shape
         if C != 3:
             raise ValueError("Expected RGB image with 3 channels.")
 
+        # Save input image for frontend preview (first batch item only)
+        preview_filename = None
+        try:
+            temp_dir = folder_paths.get_temp_directory()
+            # Use a stable filename based on a hash
+            img_hash = hashlib.md5(image[0].cpu().numpy().tobytes()).hexdigest()[:16]
+            preview_filename = f"colorblender_cache_{img_hash}.png"
+            preview_path = os.path.join(temp_dir, preview_filename)
+            
+            # Save the first input image (not processed) as preview reference
+            preview_img_array = (image[0].cpu().numpy() * 255).astype(np.uint8)
+            preview_img = Image.fromarray(preview_img_array)
+            preview_img.save(preview_path)
+        except Exception as e:
+            print(f"Warning: Could not save preview image: {e}")
+            preview_filename = None
+
         output_images = []
 
         for b in range(B):
             img = image[b].cpu().numpy().astype(np.float32)
+            
+            # Apply invert first if enabled
+            if invert:
+                img = 1.0 - img
 
             if exposure != 0.0:
                 img = img * (2.0**exposure)
@@ -186,4 +220,13 @@ class ColorBlender:
 
             output_images.append(img.astype(np.float32))
 
-        return (torch.from_numpy(np.stack(output_images)),)
+        result = (torch.from_numpy(np.stack(output_images)),)
+        
+        # Return preview filename for UI to access
+        if preview_filename:
+            return {
+                "ui": {"cached_image": [preview_filename]},
+                "result": result
+            }
+        
+        return {"result": result}

@@ -222,6 +222,16 @@ app.registerExtension({
       if (!this.displayBounds || !this.imageLoaded) return;
       if (!this.cropState.isDragging && !this.cropState.isResizing) return;
 
+      // Check if mouse button is still pressed (fixes cursor attachment bug)
+      if (e.buttons !== undefined && (e.buttons & 1) === 0) {
+        this.cropState.isDragging = false;
+        this.cropState.isResizing = false;
+        this.cropState.dragHandle = null;
+        this.saveCropData();
+        canvas.setDirty(true, true);
+        return;
+      }
+
       const [mouseX, mouseY] = localPos;
       const { scaleX, scaleY } = this.displayBounds;
 

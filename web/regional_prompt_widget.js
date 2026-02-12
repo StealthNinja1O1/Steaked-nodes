@@ -109,7 +109,10 @@ app.registerExtension({
       canvasPlaceholder.computeSize = (width) => {
         if (this.boxState && this.boxState.canvasHeight && this.boxState.canvasWidth) {
           const aspect = this.boxState.canvasHeight / this.boxState.canvasWidth;
-          return [width, width * aspect];
+          const calculatedHeight = width * aspect;
+          // Clamp max height to prevent canvas from scaling outside node
+          const maxHeight = 600;
+          return [width, Math.min(calculatedHeight, maxHeight)];
         }
         return [width, 300];
       };
