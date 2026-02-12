@@ -12,6 +12,9 @@ from .regional_prompts import (
     RegionalPromptsAttentionImg2Img,
 )
 
+# Register Danbooru API proxy routes
+from . import danbooru_proxy
+
 NODE_CLASS_MAPPINGS = {
     "LoadAndCrop": ImageCrop,
     "ColorBlender": ColorBlender,
