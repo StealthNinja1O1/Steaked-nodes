@@ -11,6 +11,8 @@ from .regional_prompts import (
     RegionalPromptsLatentImg2Img,
     RegionalPromptsAttentionImg2Img,
 )
+from .any_switch import AnySwitch
+from .scale_to_megapixels import ImageScaleToMegapixels, ImageScaleToMegapixelsAdvanced
 
 # Register Danbooru API proxy routes
 from . import danbooru_proxy
@@ -27,6 +29,9 @@ NODE_CLASS_MAPPINGS = {
     "RegionalPromptsAttention": RegionalPromptsAttention,
     "RegionalPromptsLatentImg2Img": RegionalPromptsLatentImg2Img,
     "RegionalPromptsAttentionImg2Img": RegionalPromptsAttentionImg2Img,
+    "AnySwitch": AnySwitch,
+    "ImageScaleToMegapixels": ImageScaleToMegapixels,
+    "ImageScaleToMegapixelsAdvanced": ImageScaleToMegapixelsAdvanced,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -40,6 +45,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RegionalPromptsAttention": "Regional Prompts (Attention)",
     "RegionalPromptsLatentImg2Img": "Regional Prompts (Latent Img2Img)",
     "RegionalPromptsAttentionImg2Img": "Regional Prompts (Attention Img2Img)",
+    "AnySwitch": "Any Switch",
+    "ImageScaleToMegapixels": "Scale to Megapixels (SDXL Safe)",
+    "ImageScaleToMegapixelsAdvanced": "Scale to Megapixels (Advanced)",
 }
 
 WEB_DIRECTORY = "./web/"

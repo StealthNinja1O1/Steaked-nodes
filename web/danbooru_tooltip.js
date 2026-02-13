@@ -306,8 +306,10 @@ class DanbooruTooltip {
 
     html += '</div><div class="danbooru-tooltip-body">';
 
-    // Thumbnail image
-    if (posts && posts.preview_file_url) {
+    // Thumbnail image (if enabled in settings)
+    const showImages = app.ui.settings.getSettingValue("Steaked.DanbooruTagTooltip.ShowImages", true);
+    
+    if (showImages && posts && posts.preview_file_url) {
       const previewUrl = posts.preview_file_url.startsWith("http")
         ? posts.preview_file_url
         : `https://danbooru.donmai.us${posts.preview_file_url}`;
@@ -477,6 +479,14 @@ app.registerExtension({
     app.ui.settings.addSetting({
       id: "Steaked.DanbooruTagTooltip.Enabled",
       name: "Show Danbooru tag info on text selection",
+      type: "boolean",
+      defaultValue: true,
+    });
+
+    // Add setting for thumbnail images
+    app.ui.settings.addSetting({
+      id: "Steaked.DanbooruTagTooltip.ShowImages",
+      name: "Show thumbnail images in Danbooru tooltips",
       type: "boolean",
       defaultValue: true,
     });
