@@ -366,7 +366,16 @@ app.registerExtension({
           console.error("Failed to load image:", filename);
         };
 
-        img.src = `/view?filename=${encodeURIComponent(filename)}&type=input&subfolder=`;
+        // Parse subfolder from filename (e.g., "pasted/image.png" -> subfolder="pasted", filename="image.png")
+        let subfolder = "";
+        let baseFilename = filename;
+        const separatorIndex = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'));
+        if (separatorIndex !== -1) {
+          subfolder = filename.substring(0, separatorIndex);
+          baseFilename = filename.substring(separatorIndex + 1);
+        }
+
+        img.src = `/view?filename=${encodeURIComponent(baseFilename)}&type=input&subfolder=${encodeURIComponent(subfolder)}`;
       } catch (e) {
         console.error("Error loading image preview:", e);
       }

@@ -51,7 +51,8 @@ app.registerExtension({
       
       // Initialize preview state
       this.previewImage = null;
-      this.previewCanvas = null;
+      this.previewCanvas = null;    // offscreen canvas for processing
+      this.processedCanvas = null;  // cached result after effects
       
       // Add preview canvas as a custom widget
       this.addPreviewWidget();
@@ -95,7 +96,7 @@ app.registerExtension({
           widget.callback = ((originalCallback) => {
             return (value) => {
               if (originalCallback) originalCallback(value);
-              this.updatePreview();
+              this.processPreview();
             };
           })(widget.callback);
         }
@@ -111,7 +112,7 @@ app.registerExtension({
 
       return r;
     };
-    
+
     // Add preview widget method
     nodeType.prototype.addPreviewWidget = function() {
       const widget = {
@@ -133,36 +134,29 @@ app.registerExtension({
           ctx.lineWidth = 1;
           ctx.strokeRect(padding, previewY, previewWidth, previewHeight);
           
+          // Cheap value-change detection for sliders (which don't fire callback during drag)
           if (this.previewImage && this.previewImage.complete) {
-            // Create or get cached canvas for processing
-            if (!this.previewCanvas || 
-                this.previewCanvas.width !== this.previewImage.width || 
-                this.previewCanvas.height !== this.previewImage.height) {
-              this.previewCanvas = document.createElement('canvas');
-              this.previewCanvas.width = this.previewImage.width;
-              this.previewCanvas.height = this.previewImage.height;
+            const key = this._getWidgetValueKey();
+            if (key !== this._lastProcessedKey) {
+              this._lastProcessedKey = key;
+              clearTimeout(this._processTimer);
+              this._processTimer = setTimeout(() => this.processPreview(), 16);
             }
-            
-            // Apply color effects to canvas
-            const pctx = this.previewCanvas.getContext('2d');
-            pctx.drawImage(this.previewImage, 0, 0);
-            
-            // Apply effects
-            this.applyColorEffects(pctx);
-            
-            // Calculate scaling to fit preview  area
+          }
+          
+          if (this.processedCanvas) {
+            // Just blit the pre-processed result (fast)
             const scale = Math.min(
-              previewWidth / this.previewCanvas.width,
-              previewHeight / this.previewCanvas.height
+              previewWidth / this.processedCanvas.width,
+              previewHeight / this.processedCanvas.height
             );
-            const scaledWidth = this.previewCanvas.width * scale;
-            const scaledHeight = this.previewCanvas.height * scale;
+            const scaledWidth = this.processedCanvas.width * scale;
+            const scaledHeight = this.processedCanvas.height * scale;
             const offsetX = padding + (previewWidth - scaledWidth) / 2;
             const offsetY = previewY + (previewHeight - scaledHeight) / 2;
             
-            // Draw processed image
             ctx.drawImage(
-              this.previewCanvas,
+              this.processedCanvas,
               offsetX, offsetY,
               scaledWidth, scaledHeight
             );
@@ -173,7 +167,7 @@ app.registerExtension({
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
             ctx.fillText(
-              "Connect an image input to see preview",
+              this.previewImage ? "Processing..." : "Connect an image input to see preview",
               width / 2,
               previewY + previewHeight / 2
             );
@@ -387,7 +381,7 @@ app.registerExtension({
       img.crossOrigin = "anonymous";
       img.onload = () => {
         this.previewImage = img;
-        this.updatePreview();
+        this.processPreview();
       };
       img.onerror = (e) => {
         console.log("Failed to load preview image:", filename, e);
@@ -396,9 +390,49 @@ app.registerExtension({
       img.src = `/view?filename=${encodeURIComponent(filename)}&type=${type}&subfolder=`;
     };
     
-    // Trigger preview redraw
-    nodeType.prototype.updatePreview = function() {
-      if (this.previewImage) {
+    // Get a simple key of current widget values for change detection
+    nodeType.prototype._getWidgetValueKey = function() {
+      const vals = [];
+      for (const w of this.widgets) {
+        if (w.name !== "cached_image_path" && w.name !== "preview_canvas") {
+          vals.push(w.value);
+        }
+      }
+      return vals.join(',');
+    };
+    
+    // Process preview image with current effects (expensive - only called on value changes)
+    nodeType.prototype.processPreview = function() {
+      if (!this.previewImage || !this.previewImage.complete) return;
+      
+      const w = this.previewImage.width;
+      const h = this.previewImage.height;
+      
+      // Create/resize work canvas
+      if (!this.previewCanvas || this.previewCanvas.width !== w || this.previewCanvas.height !== h) {
+        this.previewCanvas = document.createElement('canvas');
+        this.previewCanvas.width = w;
+        this.previewCanvas.height = h;
+      }
+      
+      // Create/resize result canvas
+      if (!this.processedCanvas || this.processedCanvas.width !== w || this.processedCanvas.height !== h) {
+        this.processedCanvas = document.createElement('canvas');
+        this.processedCanvas.width = w;
+        this.processedCanvas.height = h;
+      }
+      
+      // Draw original image and apply effects
+      const pctx = this.previewCanvas.getContext('2d', { willReadFrequently: true });
+      pctx.drawImage(this.previewImage, 0, 0);
+      this.applyColorEffects(pctx);
+      
+      // Copy result to processedCanvas
+      const rctx = this.processedCanvas.getContext('2d');
+      rctx.drawImage(this.previewCanvas, 0, 0);
+      
+      // Request redraw to show updated result
+      if (app.graph) {
         app.graph.setDirtyCanvas(true, true);
       }
     };
@@ -411,6 +445,9 @@ app.registerExtension({
           originalDraw.apply(this, arguments);
         }
         
+        // Only draw extras if there's enough width
+        if (width < 150) return;
+        
         // Add visual indicator for invert toggle
         const labelText = "Invert Colors";
         const labelX = 10;
@@ -419,11 +456,15 @@ app.registerExtension({
         ctx.fillStyle = "#ffffff";
         ctx.textAlign = "left";
         ctx.textBaseline = "middle";
-        ctx.fillText(labelText, labelX + 70, labelY);
+        
+        // Only draw label if enough space
+        if (width > 200) {
+          ctx.fillText(labelText, labelX + 70, labelY);
+        }
         
         // Draw a small invert icon (black/white squares)
         const iconSize = 16;
-        const iconX = labelX + 200;
+        const iconX = Math.min(labelX + 200, width - iconSize - 15);
         const iconY = y + (height - iconSize) / 2;
         
         ctx.fillStyle = widget.value ? "#ffffff" : "#666666";

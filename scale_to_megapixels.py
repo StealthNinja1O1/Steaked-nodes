@@ -43,7 +43,7 @@ class ImageScaleToMegapixels:
     RETURN_TYPES = ("IMAGE",)
     RETURN_NAMES = ("image",)
     FUNCTION = "scale"
-    CATEGORY = "image/upscaling"
+    CATEGORY = "Steaked-nodes/upscaling"
     
     def scale(self, image, upscale_method, megapixels, multiple_of):
         """
@@ -133,7 +133,7 @@ class ImageScaleToMegapixelsAdvanced:
     RETURN_TYPES = ("IMAGE", "INT", "INT")
     RETURN_NAMES = ("image", "width", "height")
     FUNCTION = "scale"
-    CATEGORY = "image/upscaling"
+    CATEGORY = "Steaked-nodes/upscaling"
     
     def scale(self, image, upscale_method, megapixels, width_multiple, height_multiple, keep_aspect_ratio):
         """

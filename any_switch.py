@@ -46,7 +46,7 @@ class AnySwitch:
     RETURN_TYPES = (any_type,)
     RETURN_NAMES = ("output",)
     FUNCTION = "switch"
-    CATEGORY = "utils/logic"
+    CATEGORY = "Steaked-nodes/logic"
     OUTPUT_IS_LIST = (False,)
     
     @classmethod
