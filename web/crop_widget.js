@@ -36,6 +36,16 @@ app.registerExtension({
       cropDataWidget.computeSize = () => [0, -4]; // Hide completely
       this.cropDataWidget = cropDataWidget;
 
+      this.addWidget("button", "Reset Crop", null, () => {
+        if (!this.imageLoaded) return;
+        this.cropState.x = 0;
+        this.cropState.y = 0;
+        this.cropState.width = this.cropState.imageWidth;
+        this.cropState.height = this.cropState.imageHeight;
+        this.saveCropData();
+        app.graph.setDirtyCanvas(true, true);
+      });
+
       const imageWidget = this.widgets.find((w) => w.name === "image");
       if (imageWidget) {
         imageWidget.options = imageWidget.options || {};

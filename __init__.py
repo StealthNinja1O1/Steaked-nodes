@@ -10,6 +10,8 @@ from .regional_prompts import (
     RegionalPromptsAttention,
     RegionalPromptsLatentImg2Img,
     RegionalPromptsAttentionImg2Img,
+    RegionalPromptsLatentImageInput,
+    RegionalPromptsAttentionImageInput,
 )
 from .any_switch import AnySwitch
 from .scale_to_megapixels import ImageScaleToMegapixels, ImageScaleToMegapixelsAdvanced
@@ -29,6 +31,8 @@ NODE_CLASS_MAPPINGS = {
     "RegionalPromptsAttention": RegionalPromptsAttention,
     "RegionalPromptsLatentImg2Img": RegionalPromptsLatentImg2Img,
     "RegionalPromptsAttentionImg2Img": RegionalPromptsAttentionImg2Img,
+    "RegionalPromptsLatentImageInput": RegionalPromptsLatentImageInput,
+    "RegionalPromptsAttentionImageInput": RegionalPromptsAttentionImageInput,
     "AnySwitch": AnySwitch,
     "ImageScaleToMegapixels": ImageScaleToMegapixels,
     "ImageScaleToMegapixelsAdvanced": ImageScaleToMegapixelsAdvanced,
@@ -45,6 +49,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "RegionalPromptsAttention": "Regional Prompts (Attention)",
     "RegionalPromptsLatentImg2Img": "Regional Prompts (Latent Img2Img)",
     "RegionalPromptsAttentionImg2Img": "Regional Prompts (Attention Img2Img)",
+    "RegionalPromptsLatentImageInput": "Regional Prompts (Latent + Image Input)",
+    "RegionalPromptsAttentionImageInput": "Regional Prompts (Attention + Image Input)",
     "AnySwitch": "Any Switch",
     "ImageScaleToMegapixels": "Scale to Megapixels (SDXL Safe)",
     "ImageScaleToMegapixelsAdvanced": "Scale to Megapixels (Advanced)",

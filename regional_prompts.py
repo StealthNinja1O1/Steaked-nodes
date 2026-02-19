@@ -9,6 +9,7 @@ import json
 import re
 import logging
 import os
+import hashlib
 import numpy as np
 import torch
 from PIL import Image, ImageOps, ImageSequence
@@ -476,23 +477,191 @@ class RegionalPromptsAttentionImg2Img:
         return (output_image, conditioning, width, height)
 
 
-class RegionalPromptsAttentionExperimental(RegionalPromptsAttention):
-    """Alias for RegionalPromptsAttention."""
-    FUNCTION = "apply_regional_prompts_attention_experimental"
+def _build_regional_prompts_from_boxes(box_data, prompts_map, base):
+    """Shared helper to parse box_data JSON into RegionalPromptData list."""
+    try:
+        boxes = json.loads(box_data)
+    except json.JSONDecodeError:
+        boxes = []
+
+    regional_prompts = []
+    for box in boxes:
+        box_id = int(box.get("id", 0))
+        if box_id not in prompts_map or not prompts_map[box_id].strip():
+            continue
+
+        prompt_text = clean_prompt(prompts_map[box_id])
+        if base:
+            prompt_text = f"{base}, {prompt_text}"
+
+        x = float(box.get("x", 0))
+        y = float(box.get("y", 0))
+        w = float(box.get("w", 0))
+        h = float(box.get("h", 0))
+        weight = float(box.get("weight", 1.0))
+        start = float(box.get("start", 0.0))
+        end = float(box.get("end", 1.0))
+        locked = bool(box.get("locked", True))
+        corners = box.get("corners", None)
+
+        if corners and isinstance(corners, list) and len(corners) == 4:
+            corners = [[float(c[0]), float(c[1])] for c in corners]
+        else:
+            corners = None
+
+        regional_prompts.append(RegionalPromptData(
+            prompt_text=prompt_text, x=x, y=y, w=w, h=h,
+            weight=weight, start=start, end=end,
+            corners=corners, locked=locked,
+        ))
+    return regional_prompts
+
+
+def _save_tensor_preview(image_tensor):
+    """Save the first frame of an IMAGE tensor to the temp dir for frontend preview."""
+    try:
+        temp_dir = folder_paths.get_temp_directory()
+        img_hash = hashlib.md5(image_tensor[0].cpu().numpy().tobytes()).hexdigest()[:16]
+        preview_filename = f"regional_preview_{img_hash}.png"
+        preview_path = os.path.join(temp_dir, preview_filename)
+        preview_arr = (image_tensor[0].cpu().numpy() * 255).astype(np.uint8)
+        Image.fromarray(preview_arr).save(preview_path)
+        return preview_filename
+    except Exception as e:
+        print(f"Warning: Could not save regional preview: {e}")
+        return None
+
+
+class RegionalPromptsLatentImageInput:
+    """Latent regional prompting that accepts a pre-processed IMAGE tensor input."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "base_prompt": ("STRING", {"multiline": True, "default": ""}),
+                "clip": ("CLIP",),
+            },
+            "optional": {
+                "prompt_1": ("STRING", {"multiline": True, "default": ""}),
+                "prompt_2": ("STRING", {"multiline": True, "default": ""}),
+                "prompt_3": ("STRING", {"multiline": True, "default": ""}),
+                "prompt_4": ("STRING", {"multiline": True, "default": ""}),
+            },
+            "hidden": {
+                "box_data": ("STRING", {"default": "[]"}),
+                "unique_id": "UNIQUE_ID",
+                "cached_image_path": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "CONDITIONING", "INT", "INT")
+    RETURN_NAMES = ("image", "conditioning", "width", "height")
+    FUNCTION = "apply"
+    CATEGORY = "Steaked-nodes/prompting"
+    OUTPUT_NODE = True
+
+    def apply(self, image, base_prompt, clip, unique_id, box_data="[]",
+              prompt_1="", prompt_2="", prompt_3="", prompt_4="", cached_image_path=""):
+        B, H, W, C = image.shape
+        width, height = W, H
+        preview_filename = _save_tensor_preview(image)
+
+        base = clean_prompt(base_prompt)
+        prompts_map = {1: prompt_1, 2: prompt_2, 3: prompt_3, 4: prompt_4}
+        regional_prompts = _build_regional_prompts_from_boxes(box_data, prompts_map, base)
+
+        log.info(f"RegionalPromptsLatentImageInput: base='{base}', regions={len(regional_prompts)}, size={W}x{H}")
+
+        conditioning = encode_regional_prompts_direct(
+            clip=clip, base_prompt=base, regional_prompts=regional_prompts,
+            width=width, height=height, use_attention_couple=False,
+        )
+        result = (image, conditioning, width, height)
+        if preview_filename:
+            return {"ui": {"cached_image": [preview_filename]}, "result": result}
+        return {"result": result}
+
+    @classmethod
+    def IS_CHANGED(cls, image, **kwargs):
+        m = hashlib.md5(image[0].cpu().numpy().tobytes())
+        m.update(kwargs.get("box_data", "").encode())
+        return m.hexdigest()
+
+
+class RegionalPromptsAttentionImageInput:
+    """Attention regional prompting that accepts a pre-processed IMAGE tensor input."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "base_prompt": ("STRING", {"multiline": True, "default": ""}),
+                "clip": ("CLIP",),
+            },
+            "optional": {
+                "prompt_1": ("STRING", {"multiline": True, "default": ""}),
+                "prompt_2": ("STRING", {"multiline": True, "default": ""}),
+                "prompt_3": ("STRING", {"multiline": True, "default": ""}),
+                "prompt_4": ("STRING", {"multiline": True, "default": ""}),
+            },
+            "hidden": {
+                "box_data": ("STRING", {"default": "[]"}),
+                "unique_id": "UNIQUE_ID",
+                "cached_image_path": ("STRING", {"default": ""}),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "CONDITIONING", "INT", "INT")
+    RETURN_NAMES = ("image", "conditioning", "width", "height")
+    FUNCTION = "apply"
+    CATEGORY = "Steaked-nodes/prompting"
+    OUTPUT_NODE = True
+
+    def apply(self, image, base_prompt, clip, unique_id, box_data="[]",
+              prompt_1="", prompt_2="", prompt_3="", prompt_4="", cached_image_path=""):
+        B, H, W, C = image.shape
+        width, height = W, H
+        preview_filename = _save_tensor_preview(image)
+
+        base = clean_prompt(base_prompt)
+        prompts_map = {1: prompt_1, 2: prompt_2, 3: prompt_3, 4: prompt_4}
+        regional_prompts = _build_regional_prompts_from_boxes(box_data, prompts_map, base)
+
+        log.info(f"RegionalPromptsAttentionImageInput: base='{base}', regions={len(regional_prompts)}, size={W}x{H}")
+
+        conditioning = encode_regional_prompts_direct(
+            clip=clip, base_prompt=base, regional_prompts=regional_prompts,
+            width=width, height=height, use_attention_couple=True,
+        )
+        result = (image, conditioning, width, height)
+        if preview_filename:
+            return {"ui": {"cached_image": [preview_filename]}, "result": result}
+        return {"result": result}
+
+    @classmethod
+    def IS_CHANGED(cls, image, **kwargs):
+        m = hashlib.md5(image[0].cpu().numpy().tobytes())
+        m.update(kwargs.get("box_data", "").encode())
+        return m.hexdigest()
 
 
 NODE_CLASS_MAPPINGS = {
     "RegionalPromptsLatent": RegionalPromptsLatent,
     "RegionalPromptsAttention": RegionalPromptsAttention,
-    "RegionalPromptsAttentionExperimental": RegionalPromptsAttentionExperimental,
     "RegionalPromptsLatentImg2Img": RegionalPromptsLatentImg2Img,
     "RegionalPromptsAttentionImg2Img": RegionalPromptsAttentionImg2Img,
+    "RegionalPromptsLatentImageInput": RegionalPromptsLatentImageInput,
+    "RegionalPromptsAttentionImageInput": RegionalPromptsAttentionImageInput,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "RegionalPromptsLatent": "Regional Prompts (Latent/MASK)",
-    "RegionalPromptsAttention": "Regional Prompts (Attention/COUPLE)",
-    "RegionalPromptsAttentionExperimental": "Regional Prompts (Attention/Experimental)",
-    "RegionalPromptsLatentImg2Img": "Regional Prompts (Latent/MASK Img2Img)",
-    "RegionalPromptsAttentionImg2Img": "Regional Prompts (Attention/COUPLE Img2Img)",
+    "RegionalPromptsLatent": "Regional Prompts (Latent)",
+    "RegionalPromptsAttention": "Regional Prompts (Attention)",
+    "RegionalPromptsLatentImg2Img": "Regional Prompts (Latent Img2Img)",
+    "RegionalPromptsAttentionImg2Img": "Regional Prompts (Attention Img2Img)",
+    "RegionalPromptsLatentImageInput": "Regional Prompts (Latent + Image Input)",
+    "RegionalPromptsAttentionImageInput": "Regional Prompts (Attention + Image Input)",
 }

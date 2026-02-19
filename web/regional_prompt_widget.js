@@ -18,6 +18,8 @@ app.registerExtension({
       "RegionalPromptsAttention",
       "RegionalPromptsLatentImg2Img",
       "RegionalPromptsAttentionImg2Img",
+      "RegionalPromptsLatentImageInput",
+      "RegionalPromptsAttentionImageInput",
     ];
 
     if (!supportedNodes.includes(nodeData.name)) return;
@@ -28,6 +30,7 @@ app.registerExtension({
 
       this.serialize_widgets = true;
       this.isImg2Img = nodeData.name.includes("Img2Img");
+      this.isImageInput = nodeData.name.includes("ImageInput");
 
       // State initialization
       this.boxState = {
@@ -145,18 +148,29 @@ app.registerExtension({
           const originalCallback = imageWidget.callback;
           imageWidget.callback = (v) => {
             if (originalCallback) originalCallback(v);
-            this.loadBackgroundImage(v);
+            this.loadBackgroundImage(v, "input");
           };
 
           // Load initial image if set
           if (imageWidget.value) {
-            this.loadBackgroundImage(imageWidget.value);
+            this.loadBackgroundImage(imageWidget.value, "input");
           }
         }
       }
 
       this.setSize([400, 600]);
       return r;
+    };
+
+    // Handle execution output for image-input nodes (load cached preview like ColorBlender)
+    const onExecuted = nodeType.prototype.onExecuted;
+    nodeType.prototype.onExecuted = function(message) {
+      if (onExecuted) onExecuted.apply(this, arguments);
+      if (this.isImageInput && message && message.cached_image && message.cached_image.length > 0) {
+        this.loadBackgroundImage(message.cached_image[0], "temp");
+        const cachedWidget = this.widgets?.find(w => w.name === "cached_image_path");
+        if (cachedWidget) cachedWidget.value = message.cached_image[0];
+      }
     };
 
     nodeType.prototype.onConfigure = function (o) {
@@ -190,19 +204,67 @@ app.registerExtension({
             console.error("RegionalPrompts: Failed to restore boxes", e);
           }
         }
+
+        // For image-input nodes, restore the cached background preview
+        if (this.isImageInput) {
+          const cachedWidget = this.widgets.find(w => w.name === "cached_image_path");
+          if (cachedWidget && cachedWidget.value) {
+            this.loadBackgroundImage(cachedWidget.value, "temp");
+          }
+        }
       }
     };
 
-    nodeType.prototype.loadBackgroundImage = function(imageName) {
+    nodeType.prototype.loadBackgroundImage = function(imageName, type = "input") {
       if (!imageName) return;
 
       const img = new Image();
-      img.src = `/view?filename=${encodeURIComponent(imageName)}&type=input&subfolder=`;
+      
+      // Parse subfolder from filename (e.g. "pasted/image.png" -> subfolder="pasted")
+      let subfolder = "";
+      let baseFilename = imageName;
+      if (type === "input") {
+        const sep = Math.max(imageName.lastIndexOf('/'), imageName.lastIndexOf('\\'));
+        if (sep !== -1) {
+          subfolder = imageName.substring(0, sep);
+          baseFilename = imageName.substring(sep + 1);
+        }
+      }
+
+      img.src = `/view?filename=${encodeURIComponent(baseFilename)}&type=${type}&subfolder=${encodeURIComponent(subfolder)}`;
 
       img.onload = () => {
+        const newW = img.width;
+        const newH = img.height;
+        const oldW = this.boxState.canvasWidth;
+        const oldH = this.boxState.canvasHeight;
+
+        // Rescale boxes if image resolution changed and we already have boxes
+        if (oldW && oldH && (oldW !== newW || oldH !== newH) && this.boxState.boxes.length > 0) {
+          const scaleX = newW / oldW;
+          const scaleY = newH / oldH;
+          this.boxState.boxes.forEach(box => {
+            // Rescale corners
+            box.corners = box.corners.map(([cx, cy]) => [
+              Math.max(0, Math.min(cx * scaleX, newW)),
+              Math.max(0, Math.min(cy * scaleY, newH)),
+            ]);
+            // Update bounding box fields from rescaled corners
+            const xs = box.corners.map(c => c[0]);
+            const ys = box.corners.map(c => c[1]);
+            box.x = Math.min(...xs);
+            box.y = Math.min(...ys);
+            box.w = Math.max(...xs) - box.x;
+            box.h = Math.max(...ys) - box.y;
+          });
+          this.saveBoxData();
+        }
+
         this.boxState.backgroundImage = img;
-        this.boxState.canvasWidth = img.width;
-        this.boxState.canvasHeight = img.height;
+        this.boxState.canvasWidth = newW;
+        this.boxState.canvasHeight = newH;
+        // Auto-resize node to fit the new canvas aspect ratio
+        this._autoResizeForCanvas();
         this.setDirtyCanvas(true, true);
       };
 
@@ -211,9 +273,33 @@ app.registerExtension({
       };
     };
 
+    // Auto-resize the node height to fit the canvas at current width
+    nodeType.prototype._autoResizeForCanvas = function() {
+      const margin = 10;
+      const nodeWidth = this.size[0];
+      const availableWidth = nodeWidth - margin * 2;
+      const { w: imgW, h: imgH } = this.getCanvasDimensions();
+      const aspect = imgH / imgW;
+      const canvasH = Math.min(availableWidth * aspect, 600);
+
+      // Sum up widget heights to find where the canvas starts
+      let widgetsH = LiteGraph.NODE_TITLE_HEIGHT;
+      if (this.widgets) {
+        for (const w of this.widgets) {
+          if (w.name === "canvas_placeholder") break;
+          const ws = w.computeSize ? w.computeSize(nodeWidth) : [nodeWidth, LiteGraph.NODE_WIDGET_HEIGHT];
+          widgetsH += (ws[1] > 0 ? ws[1] : 0) + 4;
+        }
+      }
+      const neededHeight = widgetsH + canvasH + margin * 2;
+      if (this.size[1] < neededHeight) {
+        this.size[1] = neededHeight;
+      }
+    };
+
     // Helper to get dimensions from inputs (for non-img2img nodes)
     nodeType.prototype.getCanvasDimensions = function () {
-      if (this.isImg2Img) {
+      if (this.isImg2Img || this.isImageInput) {
         return { w: this.boxState.canvasWidth || 1024, h: this.boxState.canvasHeight || 1024 };
       }
 
@@ -311,6 +397,12 @@ app.registerExtension({
       const { w: imgW, h: imgH } = this.getCanvasDimensions();
       this.boxState.canvasWidth = imgW;
       this.boxState.canvasHeight = imgH;
+
+      // Auto-grow node if canvas would overflow the bottom
+      const bottomEdge = startY + displayHeight + margin;
+      if (bottomEdge > this.size[1]) {
+        this.size[1] = bottomEdge;
+      }
 
       this.displayBounds = {
         startX,
