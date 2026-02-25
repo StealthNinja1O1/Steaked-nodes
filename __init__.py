@@ -15,6 +15,8 @@ from .regional_prompts import (
 )
 from .any_switch import AnySwitch
 from .scale_to_megapixels import ImageScaleToMegapixels, ImageScaleToMegapixelsAdvanced
+from .character_library import SteakedLibrary
+from .text_concat import TextConcat
 
 # Register Danbooru API proxy routes
 from . import danbooru_proxy
@@ -36,6 +38,8 @@ NODE_CLASS_MAPPINGS = {
     "AnySwitch": AnySwitch,
     "ImageScaleToMegapixels": ImageScaleToMegapixels,
     "ImageScaleToMegapixelsAdvanced": ImageScaleToMegapixelsAdvanced,
+    "SteakedLibrary": SteakedLibrary,
+    "SteakedTextConcat": TextConcat,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -54,6 +58,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "AnySwitch": "Any Switch",
     "ImageScaleToMegapixels": "Scale to Megapixels (SDXL Safe)",
     "ImageScaleToMegapixelsAdvanced": "Scale to Megapixels (Advanced)",
+    "SteakedLibrary": "Prompt Library",
+    "SteakedTextConcat": "Text Concat",
 }
 
 WEB_DIRECTORY = "./web/"
