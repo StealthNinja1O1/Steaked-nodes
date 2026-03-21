@@ -1,4 +1,6 @@
 import { app } from "../../scripts/app.js";
+import { showLibraryModal } from "./crop/library_modal.js";
+
 const HANDLE_SIZE = 10;
 const MIN_CROP_SIZE = 20;
 
@@ -27,6 +29,7 @@ app.registerExtension({
         dragStartX: 0,
         dragStartY: 0,
         initialCrop: null,
+        folderType: "input", // Default to input folder
       };
 
       this.imageElement = null;
@@ -35,6 +38,22 @@ app.registerExtension({
       const cropDataWidget = this.addWidget("text", "crop_data", "", (v) => {}, { serialize: true });
       cropDataWidget.computeSize = () => [0, -4]; // Hide completely
       this.cropDataWidget = cropDataWidget;
+
+      this.addWidget("button", "Library", null, () => {
+        showLibraryModal((fullFilename) => {
+          // Parse folder type from filename (format: "input:filename" or "output:filename")
+          const separatorIndex = fullFilename.indexOf(":");
+          if (separatorIndex !== -1) {
+            this.cropState.folderType = fullFilename.substring(0, separatorIndex);
+            this.imageWidget.value = fullFilename.substring(separatorIndex + 1);
+          } else {
+            // Default to input folder if no prefix
+            this.cropState.folderType = "input";
+            this.imageWidget.value = fullFilename;
+          }
+          this.loadImagePreview(this.imageWidget.value);
+        });
+      });
 
       this.addWidget("button", "Reset Crop", null, () => {
         if (!this.imageLoaded) return;
@@ -47,6 +66,7 @@ app.registerExtension({
       });
 
       const imageWidget = this.widgets.find((w) => w.name === "image");
+      this.imageWidget = imageWidget;
       if (imageWidget) {
         imageWidget.options = imageWidget.options || {};
         imageWidget.options.hidePreview = true;
@@ -57,7 +77,31 @@ app.registerExtension({
         const originalCallback = imageWidget.callback;
         imageWidget.callback = (...args) => {
           if (originalCallback) originalCallback.apply(imageWidget, args);
+          // When image is changed via dropdown, try to restore folder type from crop data
+          const cropDataWidget = this.widgets.find((w) => w.name === "crop_data");
+          if (cropDataWidget && cropDataWidget.value && cropDataWidget.value.trim() !== "") {
+            try {
+              const savedCrop = JSON.parse(cropDataWidget.value);
+              if (savedCrop.folderType) {
+                this.cropState.folderType = savedCrop.folderType;
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
           this.loadImagePreview(imageWidget.value);
+        };
+
+        // Update serializeValue to include folder type in the returned filename
+        const originalSerializeValue = imageWidget.serializeValue;
+        imageWidget.serializeValue = async (node, index) => {
+          const filename = imageWidget.value;
+          const folderType = this.cropState.folderType || "input";
+          // Return filename with folder type prefix if not already present
+          if (filename && !filename.includes(":")) {
+            return `${folderType}:${filename}`;
+          }
+          return filename;
         };
 
         if (imageWidget.value && imageWidget.value.trim() !== "") {
@@ -161,6 +205,24 @@ app.registerExtension({
       handles.forEach((handle) => {
         ctx.fillRect(handle.x, handle.y, HANDLE_SIZE, HANDLE_SIZE);
       });
+
+      // Draw folder type badge
+      const folderType = this.cropState.folderType || "input";
+      const folderBadgeColor = folderType === "output" ? "#ff9800" : "#4caf50";
+      ctx.fillStyle = folderBadgeColor;
+      ctx.font = "bold 10px Arial";
+      ctx.textAlign = "left";
+      ctx.fillText(folderType.toUpperCase(), startX, startY - 6);
+
+      // Draw resolution and megapixel info below the image
+      const resW = Math.round(this.cropState.width);
+      const resH = Math.round(this.cropState.height);
+      const megapixels = ((resW * resH) / 1000000).toFixed(2);
+
+      ctx.fillStyle = "#888";
+      ctx.font = "11px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(`${resW} × ${resH} (${megapixels} MP)`, startX + displayWidth / 2, startY + displayHeight + 20);
 
       ctx.restore();
 
@@ -333,6 +395,10 @@ app.registerExtension({
                 this.cropState.y = savedCrop.y;
                 this.cropState.width = savedCrop.width;
                 this.cropState.height = savedCrop.height;
+                // Restore folder type if present in saved data
+                if (savedCrop.folderType) {
+                  this.cropState.folderType = savedCrop.folderType;
+                }
                 hasSavedCrop = true;
               }
             } catch (e) {
@@ -385,7 +451,10 @@ app.registerExtension({
           baseFilename = filename.substring(separatorIndex + 1);
         }
 
-        img.src = `/view?filename=${encodeURIComponent(baseFilename)}&type=input&subfolder=${encodeURIComponent(subfolder)}`;
+        // Use folder type from state (default to "input" if not set)
+        const folderType = this.cropState.folderType || "input";
+
+        img.src = `/view?filename=${encodeURIComponent(baseFilename)}&type=${folderType}&subfolder=${encodeURIComponent(subfolder)}`;
       } catch (e) {
         console.error("Error loading image preview:", e);
       }
@@ -397,6 +466,7 @@ app.registerExtension({
         y: Math.round(this.cropState.y),
         width: Math.round(this.cropState.width),
         height: Math.round(this.cropState.height),
+        folderType: this.cropState.folderType || "input",
       });
 
       if (this.cropDataWidget) {

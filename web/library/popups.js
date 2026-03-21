@@ -10,7 +10,7 @@ function mk(tag, css, ...kids) {
   return e;
 }
 
-function overlay(onBgClick) {
+export function overlay(onBgClick) {
   const ov = mk("div", {
     position: "fixed",
     inset: "0",
