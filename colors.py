@@ -41,6 +41,10 @@ class ColorBlender:
                     "FLOAT",
                     {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01},
                 ),
+                "vibrance": (
+                    "FLOAT",
+                    {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01},
+                ),
                 "blacks": (
                     "FLOAT",
                     {"default": 0.0, "min": -1.0, "max": 1.0, "step": 0.01},
@@ -124,6 +128,7 @@ class ColorBlender:
         exposure,
         temperature,
         tint,
+        vibrance,
         blacks,
         whites,
         highlights,
@@ -179,6 +184,23 @@ class ColorBlender:
                 else:  # More magenta
                     img[..., 0] = img[..., 0] * (1.0 - tint * 0.3)
                     img[..., 2] = img[..., 2] * (1.0 - tint * 0.3)
+
+            if vibrance != 0.0:
+                # Vibrance: boosts saturation in less saturated areas more than highly saturated ones
+                maxc = np.maximum(img[..., 0], np.maximum(img[..., 1], img[..., 2]))
+                minc = np.minimum(img[..., 0], np.minimum(img[..., 1], img[..., 2]))
+                avgc = (img[..., 0] + img[..., 1] + img[..., 2]) / 3.0
+                
+                # Calculate saturation (simple: max - min)
+                saturation_mask = maxc - minc
+                
+                # Calculate vibrance amount (inverse of saturation, so less saturated pixels get more boost)
+                vibrance_amount = (1.0 - saturation_mask) * vibrance
+                
+                # Apply vibrance to each channel
+                img[..., 0] = img[..., 0] + vibrance_amount * (img[..., 0] - avgc)
+                img[..., 1] = img[..., 1] + vibrance_amount * (img[..., 1] - avgc)
+                img[..., 2] = img[..., 2] + vibrance_amount * (img[..., 2] - avgc)
 
             if highlights != 0.0 or shadows != 0.0:
                 luma = (

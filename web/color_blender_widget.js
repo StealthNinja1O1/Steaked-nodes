@@ -86,6 +86,9 @@ app.registerExtension({
           case "tint":
             this.enhanceTintWidget(widget);
             break;
+          case "vibrance":
+            this.enhanceVibranceWidget(widget);
+            break;
           case "invert":
             this.enhanceInvertWidget(widget);
             break;
@@ -130,6 +133,7 @@ app.registerExtension({
         exposure: 0.0,
         temperature: 0.0,
         tint: 0.0,
+        vibrance: 0.0,
         blacks: 0.0,
         whites: 0.0,
         highlights: 0.0,
@@ -247,6 +251,7 @@ app.registerExtension({
       const invert = getWidgetValue('invert', false);
       const exposure = getWidgetValue('exposure', 0.0);
       const temperature = getWidgetValue('temperature', 0.0);
+      const vibrance = getWidgetValue('vibrance', 0.0);
       const tint = getWidgetValue('tint', 0.0);
       const highlights = getWidgetValue('highlights', 0.0);
       const shadows = getWidgetValue('shadows', 0.0);
@@ -298,8 +303,24 @@ app.registerExtension({
             b = b * (1.0 - tint * 0.3);
           }
         }
+        // 5. Vibrance
+        if (vibrance !== 0.0) {
+          const maxc = Math.max(r, Math.max(g, b));
+          const minc = Math.min(r, Math.min(g, b));
+          const avgc = (r + g + b) / 3.0;
+          
+          // Saturation as simple difference
+          const saturationMask = maxc - minc;
+          
+          // Less saturated pixels get more vibrance boost
+          const vibranceAmount = (1.0 - saturationMask) * vibrance;
+          
+          r += vibranceAmount * (r - avgc);
+          g += vibranceAmount * (g - avgc);
+          b += vibranceAmount * (b - avgc);
+        }
         
-        // 5. Highlights and Shadows
+        // 6. Highlights and Shadows
         if (highlights !== 0.0 || shadows !== 0.0) {
           const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
           
@@ -309,7 +330,7 @@ app.registerExtension({
             g += highlights * highlightMask;
             b += highlights * highlightMask;
           }
-          
+
           if (shadows !== 0.0) {
             const shadowMask = Math.pow(Math.max(0, Math.min(1, (0.5 - luma) * 2.0)), 2);
             r += shadows * shadowMask;
@@ -318,28 +339,28 @@ app.registerExtension({
           }
         }
         
-        // 6. Blacks
+        // 7. Blacks
         if (blacks !== 0.0) {
           r = r + blacks * (1.0 - r);
           g = g + blacks * (1.0 - g);
           b = b + blacks * (1.0 - b);
         }
         
-        // 7. Whites
+        // 8. Whites
         if (whites !== 0.0) {
           r = r + whites * r;
           g = g + whites * g;
           b = b + whites * b;
         }
         
-        // 8. Contrast
+        // 9. Contrast
         if (contrast !== 1.0) {
           r = (r - 0.5) * contrast + 0.5;
           g = (g - 0.5) * contrast + 0.5;
           b = (b - 0.5) * contrast + 0.5;
         }
         
-        // 9. Brightness
+        // 10. Brightness
         if (brightness !== 0.0) {
           r += brightness;
           g += brightness;
@@ -351,7 +372,7 @@ app.registerExtension({
         g = Math.max(0, Math.min(1, g));
         b = Math.max(0, Math.min(1, b));
         
-        // 10. Hue and Saturation (HSV conversion)
+        // 11. Hue and Saturation (HSV conversion)
         if (hue !== 0.0 || saturation !== 1.0) {
           const hsv = this.rgbToHsv(r, g, b);
           
@@ -833,6 +854,49 @@ app.registerExtension({
         gradient.addColorStop(0, "#00ff66"); // Green
         gradient.addColorStop(0.5, "#ffffff"); // Neutral
         gradient.addColorStop(1, "#ff00ff"); // Magenta
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        const value = widget.value || 0.0;
+        const normalizedValue = (value + 1) / 2.0; // -1 to 1 -> 0 to 1
+        const indicatorX = barX + normalizedValue * barWidth;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(indicatorX, barY + barHeight / 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      };
+    };
+
+    // Enhance Vibrance widget (muted to vibrant)
+    nodeType.prototype.enhanceVibranceWidget = function (widget) {
+      const originalDraw = widget.draw;
+      widget.draw = function (ctx, node, width, y, height) {
+        if (originalDraw) {
+          originalDraw.apply(this, arguments);
+        }
+
+        const barHeight = 8;
+        const barY = y + height - barHeight - 2;
+        const labelText = "Vibrance";
+        const labelX = 10;
+        const labelY = y + height / 2;
+        ctx.font = "12px Arial";
+        ctx.fillStyle = "#ffffff";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(labelText, labelX, labelY);
+        const barX = labelX + 70;
+        const barWidth = width - barX - 15;
+
+        const gradient = ctx.createLinearGradient(barX, 0, barX + barWidth, 0);
+        gradient.addColorStop(0, "#666666"); // Muted gray
+        gradient.addColorStop(0.5, "#ffaa00"); // Orange (mid vibrance)
+        gradient.addColorStop(1, "#ff3366"); // Vibrant pink-red
 
         ctx.fillStyle = gradient;
         ctx.fillRect(barX, barY, barWidth, barHeight);
