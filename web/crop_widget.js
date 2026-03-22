@@ -34,6 +34,8 @@ app.registerExtension({
 
       this.imageElement = null;
       this.imageLoaded = false;
+      this.isLoadingPreview = false; // Prevent concurrent preview loads
+      this.ignoreSavedFolderType = false; // Prevent restoring folderType from saved crop data
 
       const cropDataWidget = this.addWidget("text", "crop_data", "", (v) => {}, { serialize: true });
       cropDataWidget.computeSize = () => [0, -4]; // Hide completely
@@ -51,7 +53,37 @@ app.registerExtension({
             this.cropState.folderType = "input";
             this.imageWidget.value = fullFilename;
           }
-          this.loadImagePreview(this.imageWidget.value);
+
+          // Set loading flag to prevent race condition with widget callback
+          this.isLoadingPreview = true;
+          this.ignoreSavedFolderType = true; // Don't restore old folderType from saved crop data
+
+          // Update dropdown value without triggering callback first
+          this.imageWidget.options.values = [...this.imageWidget.options.values];
+          this.imageWidget.value = this.imageWidget.value;
+
+          // Save crop data with new folderType BEFORE loading preview
+          // This ensures even if callback tries to restore, it restores the correct folderType
+          this.saveCropData();
+
+          // Load preview with explicit folder type
+          this.loadImagePreview(this.imageWidget.value, this.cropState.folderType);
+
+          // Clear loading flag after a delay
+          setTimeout(() => {
+            this.isLoadingPreview = false;
+          }, 100);
+
+          // Save crop data with new folder type
+          this.saveCropData();
+
+          // Update dropdown callback after everything is done
+          setTimeout(() => {
+            if (!this.isLoadingPreview) {
+              this.imageWidget.options.values = [...this.imageWidget.options.values];
+              this.imageWidget.callback(this.imageWidget.value);
+            }
+          }, 150);
         });
       });
 
@@ -77,7 +109,38 @@ app.registerExtension({
         const originalCallback = imageWidget.callback;
         imageWidget.callback = (...args) => {
           if (originalCallback) originalCallback.apply(imageWidget, args);
-          // When image is changed via dropdown, try to restore folder type from crop data
+          // Skip preview loading if we're already loading from library
+          if (this.isLoadingPreview) return;
+
+          // When image is changed via dropdown or paste, extract folder type
+          let filename = imageWidget.value;
+          if (filename) {
+            // Check if filename has folder type prefix (format: "folder_type:filename")
+            if (filename.includes(":")) {
+              const prefixIndex = filename.indexOf(":");
+              this.cropState.folderType = filename.substring(0, prefixIndex);
+              filename = filename.substring(prefixIndex + 1);
+            }
+            // Check if filename has subfolder path
+            const separatorIndex = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'));
+            if (separatorIndex !== -1) {
+              // It's a pasted image with subfolder path
+              const subfolder = filename.substring(0, separatorIndex);
+              const baseFilename = filename.substring(separatorIndex + 1);
+
+              // Set folder type based on subfolder (only if not already set)
+              if (!this.cropState.folderType) {
+                this.cropState.folderType = "input";
+              }
+              // Keep the full path including subfolder in imageWidget.value
+              // Don't strip subfolder from the value
+              this.loadImagePreview(filename, this.cropState.folderType);
+              this.saveCropData();
+              return; // Don't call loadImagePreview again below
+            }
+          }
+
+          // Try to restore folder type from crop data for dropdown selections
           const cropDataWidget = this.widgets.find((w) => w.name === "crop_data");
           if (cropDataWidget && cropDataWidget.value && cropDataWidget.value.trim() !== "") {
             try {
@@ -89,7 +152,7 @@ app.registerExtension({
               // Ignore parse errors
             }
           }
-          this.loadImagePreview(imageWidget.value);
+          this.loadImagePreview(filename);
         };
 
         // Update serializeValue to include folder type in the returned filename
@@ -366,16 +429,55 @@ app.registerExtension({
       return false;
     };
 
-    nodeType.prototype.loadImagePreview = async function (filename) {
+    nodeType.prototype.loadImagePreview = async function (filename, explicitFolderType = null) {
       if (!filename) return;
 
       try {
+        // Strip folder type prefix if present (format: "folder_type:filename")
+        if (filename.includes(":")) {
+          const separatorIndex = filename.indexOf(":");
+          const folderType = filename.substring(0, separatorIndex);
+          const actualFilename = filename.substring(separatorIndex + 1);
+
+          // Update folder type if not explicitly provided
+          if (!explicitFolderType) {
+            this.cropState.folderType = folderType;
+          }
+          // Use the actual filename without prefix
+          filename = actualFilename;
+        }
+
+        // Restore folder type and filename from saved crop data (for page refresh)
+        if (!explicitFolderType && !this.ignoreSavedFolderType) {
+          const cropDataWidget = this.widgets.find((w) => w.name === "crop_data");
+          if (cropDataWidget && cropDataWidget.value && cropDataWidget.value.trim() !== "") {
+            try {
+              const savedCrop = JSON.parse(cropDataWidget.value);
+              if (savedCrop.folderType) {
+                this.cropState.folderType = savedCrop.folderType;
+              }
+              if (savedCrop.filename) {
+                filename = savedCrop.filename;
+                // Update widget value to match saved filename
+                this.imageWidget.value = filename;
+              }
+            } catch (e) {
+              // Ignore parse errors
+            }
+          }
+        }
+
         const img = new Image();
         img.onload = () => {
           this.imageElement = img;
           this.imageLoaded = true;
           this.cropState.imageWidth = img.width;
           this.cropState.imageHeight = img.height;
+
+          // Update folder type if explicitly provided (from library selection)
+          if (explicitFolderType) {
+            this.cropState.folderType = explicitFolderType;
+          }
 
           const cropDataWidget = this.widgets.find((w) => w.name === "crop_data");
           let hasSavedCrop = false;
@@ -395,10 +497,6 @@ app.registerExtension({
                 this.cropState.y = savedCrop.y;
                 this.cropState.width = savedCrop.width;
                 this.cropState.height = savedCrop.height;
-                // Restore folder type if present in saved data
-                if (savedCrop.folderType) {
-                  this.cropState.folderType = savedCrop.folderType;
-                }
                 hasSavedCrop = true;
               }
             } catch (e) {
@@ -436,15 +534,20 @@ app.registerExtension({
 
           this.size = [Math.max(this.size[0], targetWidth), Math.max(this.size[1], totalHeight)];
 
+          // Clear the ignoreSavedFolderType flag after loading completes
+          this.ignoreSavedFolderType = false;
+
           app.graph.setDirtyCanvas(true, true);
         };
         img.onerror = () => {
           console.error("Failed to load image:", filename);
+          this.ignoreSavedFolderType = false; // Clear flag even on error
         };
 
         // Parse subfolder from filename (e.g., "pasted/image.png" -> subfolder="pasted", filename="image.png")
         let subfolder = "";
         let baseFilename = filename;
+
         const separatorIndex = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'));
         if (separatorIndex !== -1) {
           subfolder = filename.substring(0, separatorIndex);
@@ -454,7 +557,13 @@ app.registerExtension({
         // Use folder type from state (default to "input" if not set)
         const folderType = this.cropState.folderType || "input";
 
-        img.src = `/view?filename=${encodeURIComponent(baseFilename)}&type=${folderType}&subfolder=${encodeURIComponent(subfolder)}`;
+        // Construct URL - only include subfolder parameter if subfolder is not empty
+        let url = `/view?filename=${encodeURIComponent(baseFilename)}&type=${folderType}`;
+        if (subfolder) {
+          url += `&subfolder=${encodeURIComponent(subfolder)}`;
+        }
+
+        img.src = url;
       } catch (e) {
         console.error("Error loading image preview:", e);
       }
@@ -467,6 +576,8 @@ app.registerExtension({
         width: Math.round(this.cropState.width),
         height: Math.round(this.cropState.height),
         folderType: this.cropState.folderType || "input",
+        // Save full filename for proper restoration on page refresh
+        filename: this.imageWidget.value,
       });
 
       if (this.cropDataWidget) {

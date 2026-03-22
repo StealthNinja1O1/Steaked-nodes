@@ -14,78 +14,178 @@ routes = PromptServer.instance.routes
 
 @routes.get("/steaked/crop/input_images")
 async def crop_input_images(request):
-    """List all images in the input directory with metadata."""
+    """List all images in the input directory with metadata and folder structure."""
     try:
         input_dir = folder_paths.get_input_directory()
-        files = [
-            f
-            for f in os.listdir(input_dir)
-            if os.path.isfile(os.path.join(input_dir, f))
-        ]
+
+        # Get optional subfolder query parameter
+        query_subfolder = request.query.get("subfolder", "")
+
+        # Build the base path
+        base_path = input_dir
+        if query_subfolder:
+            base_path = os.path.join(input_dir, query_subfolder)
+
+        # Check if base_path exists
+        if not os.path.exists(base_path):
+            return web.json_response({"error": "Folder not found", "folders": [], "images": []}, status=404)
+
+        # Get all items from the current path
+        all_items = sorted(os.listdir(base_path))
+
+        # Separate folders and files
+        folders = []
+        files = []
+        for item in all_items:
+            item_path = os.path.join(base_path, item)
+            if os.path.isdir(item_path):
+                # It's a folder - count images inside
+                folder_files = [
+                    f for f in os.listdir(item_path)
+                    if os.path.isfile(os.path.join(item_path, f))
+                ]
+                folder_files = folder_paths.filter_files_content_types(folder_files, ["image"])
+                if folder_files:
+                    folders.append({
+                        "name": item,
+                        "display_name": item,
+                        "image_count": len(folder_files)
+                    })
+            elif os.path.isfile(item_path):
+                # It's a file - add to files list
+                files.append(item)
+
         files = folder_paths.filter_files_content_types(files, ["image"])
 
         images = []
-        for filename in sorted(files):
-            filepath = os.path.join(input_dir, filename)
+        for filename in files:
+            filepath = os.path.join(base_path, filename)
             stat = os.stat(filepath)
+
+            # Build full filename path for API response
+            if query_subfolder:
+                full_filename = os.path.join(query_subfolder, filename)
+            else:
+                full_filename = filename
 
             # Parse subfolder if present
             subfolder = ""
             display_name = filename
-            if os.path.sep in filename:
-                parts = filename.split(os.path.sep)
+            if os.path.sep in full_filename:
+                parts = full_filename.split(os.path.sep)
                 subfolder = os.path.sep.join(parts[:-1])
                 display_name = parts[-1]
 
+            # Convert path separators to forward slashes for URL
+            url_filename = full_filename.replace(os.path.sep, "/")
+            url_subfolder = subfolder.replace(os.path.sep, "/")
+
             images.append({
-                "filename": filename,
+                "type": "image",
+                "filename": full_filename,
                 "display_name": display_name,
                 "subfolder": subfolder,
                 "size": stat.st_size,
                 "modified": stat.st_mtime,
-                "url": f"/view?filename={filename}&type=input&subfolder={subfolder}"
+                "url": f"/view?filename={url_filename}&type=input&subfolder={url_subfolder}"
             })
 
-        return web.json_response({"images": images})
+        # Add folders to results (only show folders when viewing root)
+        result = {
+            "folders": folders if not query_subfolder else [],
+            "images": images
+        }
+
+        return web.json_response(result)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
 
 @routes.get("/steaked/crop/output_images")
 async def crop_output_images(request):
-    """List all images in the output directory with metadata."""
+    """List all images in the output directory with metadata and folder structure."""
     try:
         output_dir = folder_paths.get_output_directory()
-        files = [
-            f
-            for f in os.listdir(output_dir)
-            if os.path.isfile(os.path.join(output_dir, f))
-        ]
+
+        # Get optional subfolder query parameter
+        query_subfolder = request.query.get("subfolder", "")
+
+        # Build base path
+        base_path = output_dir
+        if query_subfolder:
+            base_path = os.path.join(output_dir, query_subfolder)
+
+        # Check if base_path exists
+        if not os.path.exists(base_path):
+            return web.json_response({"error": "Folder not found", "folders": [], "images": []}, status=404)
+
+        # Get all items from the current path
+        all_items = sorted(os.listdir(base_path))
+
+        # Separate folders and files
+        folders = []
+        files = []
+        for item in all_items:
+            item_path = os.path.join(base_path, item)
+            if os.path.isdir(item_path):
+                # It's a folder - count images inside
+                folder_files = [
+                    f for f in os.listdir(item_path)
+                    if os.path.isfile(os.path.join(item_path, f))
+                ]
+                folder_files = folder_paths.filter_files_content_types(folder_files, ["image"])
+                if folder_files:
+                    folders.append({
+                        "name": item,
+                        "display_name": item,
+                        "image_count": len(folder_files)
+                    })
+            elif os.path.isfile(item_path):
+                # It's a file - add to files list
+                files.append(item)
+
         files = folder_paths.filter_files_content_types(files, ["image"])
 
         images = []
-        for filename in sorted(files):
-            filepath = os.path.join(output_dir, filename)
+        for filename in files:
+            filepath = os.path.join(base_path, filename)
             stat = os.stat(filepath)
+
+            # Build full filename path for API response
+            if query_subfolder:
+                full_filename = os.path.join(query_subfolder, filename)
+            else:
+                full_filename = filename
 
             # Parse subfolder if present
             subfolder = ""
             display_name = filename
-            if os.path.sep in filename:
-                parts = filename.split(os.path.sep)
+            if os.path.sep in full_filename:
+                parts = full_filename.split(os.path.sep)
                 subfolder = os.path.sep.join(parts[:-1])
                 display_name = parts[-1]
 
+            # Convert path separators to forward slashes for URL
+            url_filename = full_filename.replace(os.path.sep, "/")
+            url_subfolder = subfolder.replace(os.path.sep, "/")
+
             images.append({
-                "filename": filename,
+                "type": "image",
+                "filename": full_filename,
                 "display_name": display_name,
                 "subfolder": subfolder,
                 "size": stat.st_size,
                 "modified": stat.st_mtime,
-                "url": f"/view?filename={filename}&type=output&subfolder={subfolder}"
+                "url": f"/view?filename={url_filename}&type=output&subfolder={url_subfolder}"
             })
 
-        return web.json_response({"images": images})
+        # Add folders to results (only show folders when viewing root)
+        result = {
+            "folders": folders if not query_subfolder else [],
+            "images": images
+        }
+
+        return web.json_response(result)
     except Exception as e:
         return web.json_response({"error": str(e)}, status=500)
 
@@ -241,9 +341,12 @@ class ImageCrop:
             output_dir = folder_paths.get_output_directory()
             image_path = os.path.join(output_dir, filename)
             if not os.path.exists(image_path):
-                return "Invalid image file: {}".format(image)
+                print(f"VALIDATION FAILED: {folder_type}, {filename}, path: {image_path}")
+                return "Invalid image file: {}".format(filename)
         else:
+            # Use get_annotated_filepath which properly handles subfolders
             if not folder_paths.exists_annotated_filepath(filename):
-                return "Invalid image file: {}".format(image)
+                print(f"VALIDATION FAILED: {folder_type}, {filename}")
+                return "Invalid image file: {}".format(filename)
 
         return True

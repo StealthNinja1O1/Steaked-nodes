@@ -130,6 +130,69 @@ export async function showLibraryModal(onImageSelect) {
   headerTop.append(title, tabContainer, closeButton);
   tabContainer.append(inputTab, outputTab);
 
+  // Folder navigation breadcrumb - improved UI
+  const folderBreadcrumb = document.createElement("div");
+  folderBreadcrumb.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #ccc;
+    padding: 8px 12px;
+    background: #252525;
+    border-radius: 5px;
+    margin: 8px 0;
+  `;
+
+  const folderLabel = document.createElement("span");
+  folderLabel.textContent = "📁 ";
+  folderLabel.style.cssText = "white-space: nowrap; font-size: 16px;";
+
+  const folderPath = document.createElement("span");
+  folderPath.style.cssText = `
+    color: #ddd;
+    cursor: default;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+  `;
+  folderPath.textContent = "All Images";
+
+  // "All Images" option to show everything - clear button
+  const allImagesLink = document.createElement("button");
+  allImagesLink.textContent = "✕";
+  allImagesLink.style.cssText = `
+    background: #3a3a3a;
+    border: 1px solid #4a4a4a;
+    color: #aaa;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    line-height: 1;
+  `;
+  allImagesLink.style.display = "none"; // Initially hidden
+  allImagesLink.style.marginLeft = "auto";
+  allImagesLink.title = "Clear folder selection";
+  allImagesLink.onclick = async () => {
+    currentSubfolder = "";
+    folderPath.textContent = "All Images";
+    allImagesLink.style.display = "none";
+
+    // Clear gallery and reload images
+    gallery.innerHTML = `<div style="color: #666; padding: 20px; text-align: center;">Loading...</div>`;
+
+    const success = await loadImages();
+    if (success) {
+      render(true, searchInput.value, sortSelect.value);
+    }
+  };
+
+  folderBreadcrumb.append(folderLabel, folderPath, allImagesLink);
+
   // Bottom row: search and sort
   const headerBottom = document.createElement("div");
   headerBottom.style.cssText = `
@@ -170,7 +233,7 @@ export async function showLibraryModal(onImageSelect) {
   });
 
   headerBottom.append(searchInput, sortSelect);
-  header.append(headerTop, headerBottom);
+  header.append(headerTop, folderBreadcrumb, headerBottom);
 
   // Gallery container
   const gallery = document.createElement("div");
@@ -191,11 +254,13 @@ export async function showLibraryModal(onImageSelect) {
 
   // Load and render images
   let allImages = [];
+  let allFolders = [];
+  let currentSubfolder = ""; // Track current subfolder navigation
   let loadedCount = 0;
   let isLoadingMore = false;
 
   /**
-   * Load images from API based on current folder.
+   * Load images from API based on current folder and subfolder.
    */
   async function loadImages() {
     try {
@@ -203,8 +268,14 @@ export async function showLibraryModal(onImageSelect) {
         ? "/steaked/crop/input_images"
         : "/steaked/crop/output_images";
 
-      const data = await apiGet(endpoint);
+      // Build URL with subfolder query parameter
+      const url = currentSubfolder
+        ? `${endpoint}?subfolder=${encodeURIComponent(currentSubfolder)}`
+        : endpoint;
+
+      const data = await apiGet(url);
       allImages = data.images || [];
+      allFolders = data.folders || [];
       loadedCount = 0;
       return true;
     } catch (err) {
@@ -362,42 +433,152 @@ export async function showLibraryModal(onImageSelect) {
   }
 
   /**
+   * Create folder item element.
+   */
+  function createFolderItem(folder) {
+    const container = document.createElement("div");
+    container.style.cssText = `
+      width: ${THUMBNAIL_SIZE}px;
+      height: ${THUMBNAIL_SIZE + 40}px;
+      cursor: pointer;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #2a2a3a;
+      border: 1px solid #3a3a3a;
+      transition: all 0.15s;
+    `;
+
+    container.addEventListener("mouseenter", () => {
+      container.style.borderColor = "#4a4a4a";
+      container.style.background = "#3a3a3a";
+    });
+    container.addEventListener("mouseleave", () => {
+      container.style.borderColor = "#3a3a3a";
+      container.style.background = "#2a2a3a";
+    });
+
+    // Folder icon
+    const icon = document.createElement("div");
+    icon.style.cssText = `
+      width: 50px;
+      height: 50px;
+      margin: 20px auto;
+      background: #444;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    // Simple folder icon (using text)
+    icon.textContent = "📁";
+    icon.style.fontSize = "24px";
+
+    // Folder name
+    const nameEl = document.createElement("div");
+    nameEl.textContent = folder.display_name;
+    nameEl.style.cssText = `
+      text-align: center;
+      font-size: 11px;
+      color: #ccc;
+      margin-top: 10px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding: 0 4px;
+    `;
+
+    // Image count
+    const countEl = document.createElement("div");
+    countEl.textContent = `${folder.image_count} images`;
+    countEl.style.cssText = `
+      text-align: center;
+      font-size: 9px;
+      color: #888;
+      margin-top: 4px;
+    `;
+
+    container.append(icon, nameEl, countEl);
+
+    container.onclick = async () => {
+      currentSubfolder = folder.name;
+      folderPath.textContent = folder.name;
+      allImagesLink.style.display = "inline";
+
+      // Clear gallery and show loading
+      gallery.innerHTML = `<div style="color: #666; padding: 20px; text-align: center;">Loading...</div>`;
+
+      // Load images from specific subfolder via API
+      const success = await loadImages();
+      if (success) {
+        render(true, searchInput.value, sortSelect.value);
+      }
+    };
+
+    return container;
+  }
+
+  /**
    * Filter and render function.
    * @param {boolean} firstBatch - If true, only render first batch for infinity scroll
    */
   function render(firstBatch = false, filter = "", sortIndex = 0) {
     gallery.innerHTML = "";
 
-    // Filter by search
-    let filtered = allImages.filter(img =>
-      img.display_name.toLowerCase().includes(filter.toLowerCase())
-    );
+    // Filter images by search and subfolder
+    let filteredImages = allImages.filter(img => {
+      // Filter by search text
+      if (!img.display_name.toLowerCase().includes(filter.toLowerCase())) {
+        return false;
+      }
 
-    // Sort
-    filtered = sortImages(filtered, sortIndex);
+      // Filter by subfolder
+      if (currentSubfolder) {
+        return img.subfolder === currentSubfolder;
+      }
 
-    if (filtered.length === 0) {
+      return true;
+    });
+
+    // Sort images
+    filteredImages = sortImages(filteredImages, sortIndex);
+
+    // Show folders first (if we're not in a subfolder)
+    if (!currentSubfolder && allFolders.length > 0) {
+      for (const folder of allFolders) {
+        const folderItem = createFolderItem(folder);
+        gallery.appendChild(folderItem);
+      }
+    }
+
+    if (filteredImages.length === 0 && (!currentSubfolder || allFolders.length === 0)) {
       gallery.innerHTML = `<div style="color: #666; grid-column: 1/-1; text-align: center; padding: 40px;">No images found</div>`;
       return;
     }
 
     // Show image count
-    const countLabel = document.createElement("div");
-    countLabel.style.cssText = `
-      grid-column: 1/-1;
-      color: #666;
-      font-size: 11px;
-      padding: 4px;
-      text-align: center;
-    `;
-    countLabel.textContent = `${filtered.length} image${filtered.length !== 1 ? "s" : ""}`;
-    gallery.appendChild(countLabel);
+    if (filteredImages.length > 0 || (filteredImages.length === 0 && allFolders.length > 0)) {
+      const countLabel = document.createElement("div");
+      countLabel.style.cssText = `
+        grid-column: 1/-1;
+        color: #666;
+        font-size: 11px;
+        padding: 4px;
+        text-align: center;
+      `;
+      if (currentSubfolder) {
+        countLabel.textContent = `${filteredImages.length} image${filteredImages.length !== 1 ? "s" : ""}`;
+      } else {
+        countLabel.textContent = `${filteredImages.length} image${filteredImages.length !== 1 ? "s" : ""} • ${allFolders.length} folder${allFolders.length !== 1 ? "s" : ""}`;
+      }
+      gallery.appendChild(countLabel);
+    }
 
     // Determine how many images to render
-    const renderCount = firstBatch ? Math.min(IMAGES_PER_LOAD, filtered.length) : filtered.length;
+    const renderCount = firstBatch ? Math.min(IMAGES_PER_LOAD, filteredImages.length) : filteredImages.length;
 
     for (let i = 0; i < renderCount; i++) {
-      const img = filtered[i];
+      const img = filteredImages[i];
       const thumb = createThumbnail(img);
       thumb.onclick = () => {
         // Include folder type in the filename (format: "folder_type:filename")
@@ -412,7 +593,7 @@ export async function showLibraryModal(onImageSelect) {
     loadedCount = renderCount;
 
     // If there are more images and we're doing first batch, show "scroll for more" indicator
-    if (firstBatch && filtered.length > IMAGES_PER_LOAD) {
+    if (firstBatch && filteredImages.length > IMAGES_PER_LOAD) {
       const moreIndicator = document.createElement("div");
       moreIndicator.style.cssText = `
         grid-column: 1/-1;
@@ -421,7 +602,7 @@ export async function showLibraryModal(onImageSelect) {
         color: #666;
         font-size: 11px;
       `;
-      moreIndicator.textContent = `↓ Scroll to load more (${filtered.length - IMAGES_PER_LOAD} remaining)`;
+      moreIndicator.textContent = `↓ Scroll to load more (${filteredImages.length - IMAGES_PER_LOAD} remaining)`;
       gallery.appendChild(moreIndicator);
     }
   }
@@ -517,7 +698,12 @@ export async function showLibraryModal(onImageSelect) {
     if (currentFolder === "input") return;
 
     currentFolder = "input";
+    currentSubfolder = ""; // Clear folder selection when switching tabs
     updateTabStyles();
+
+    // Reset breadcrumb
+    folderPath.textContent = "All Images";
+    allImagesLink.style.display = "none";
 
     // Clear gallery and reload images
     gallery.innerHTML = `<div style="color: #666; padding: 20px; text-align: center;">Loading...</div>`;
@@ -532,7 +718,12 @@ export async function showLibraryModal(onImageSelect) {
     if (currentFolder === "output") return;
 
     currentFolder = "output";
+    currentSubfolder = ""; // Clear folder selection when switching tabs
     updateTabStyles();
+
+    // Reset breadcrumb
+    folderPath.textContent = "All Images";
+    allImagesLink.style.display = "none";
 
     // Clear gallery and reload images
     gallery.innerHTML = `<div style="color: #666; padding: 20px; text-align: center;">Loading...</div>`;

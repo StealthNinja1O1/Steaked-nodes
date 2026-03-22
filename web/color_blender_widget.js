@@ -56,7 +56,12 @@ app.registerExtension({
       
       // Add preview canvas as a custom widget
       this.addPreviewWidget();
-      
+
+      // Add reset button widget
+      this.addWidget("button", "Reset to Defaults", null, () => {
+        this.resetToDefaults();
+      });
+
       // Find and enhance each widget
       for (let widget of this.widgets) {
         switch (widget.name) {
@@ -93,6 +98,8 @@ app.registerExtension({
         
         // Wire up widgets to trigger preview updates (except hidden ones)
         if (widget.name !== "cached_image_path") {
+          // Save original callback before wrapping
+          widget.originalCallback = widget.callback;
           widget.callback = ((originalCallback) => {
             return (value) => {
               if (originalCallback) originalCallback(value);
@@ -101,7 +108,7 @@ app.registerExtension({
           })(widget.callback);
         }
       }
-      
+
       // Try to load cached preview if available
       setTimeout(() => {
         const cachedWidget = this.widgets?.find(w => w.name === "cached_image_path");
@@ -111,6 +118,49 @@ app.registerExtension({
       }, 100);
 
       return r;
+    };
+
+    // Reset all widgets to default values
+    nodeType.prototype.resetToDefaults = function() {
+      const defaults = {
+        hue: 0.0,
+        saturation: 1.0,
+        brightness: 0.0,
+        contrast: 1.0,
+        exposure: 0.0,
+        temperature: 0.0,
+        tint: 0.0,
+        blacks: 0.0,
+        whites: 0.0,
+        highlights: 0.0,
+        shadows: 0.0,
+        invert: false
+      };
+
+      // Reset each widget to its default value (skip non-control widgets)
+      for (const widget of this.widgets) {
+        // Skip hidden widgets, button widgets, and preview canvas
+        if (widget.name === "cached_image_path" || widget.type === "button" || widget.type === "preview") {
+          continue;
+        }
+
+        const defaultValue = defaults[widget.name];
+        if (defaultValue !== undefined) {
+          widget.value = defaultValue;
+          // Trigger the original callback if it exists to update preview
+          if (widget.originalCallback) {
+            widget.originalCallback(defaultValue);
+          }
+        }
+      }
+
+      // Process preview with new values
+      this.processPreview();
+
+      // Request canvas redraw
+      if (app.graph) {
+        app.graph.setDirtyCanvas(true, true);
+      }
     };
 
     // Add preview widget method
