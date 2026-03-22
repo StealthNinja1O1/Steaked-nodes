@@ -16,6 +16,7 @@ from .regional_prompts import (
 from .any_switch import AnySwitch
 from .scale_to_megapixels import ImageScaleToMegapixels, ImageScaleToMegapixelsAdvanced
 from .character_library import SteakedLibrary
+from .save_image_to_library import SaveImageToLibrary
 from .text_concat import TextConcat
 
 # Register Danbooru API proxy routes
@@ -39,6 +40,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageScaleToMegapixels": ImageScaleToMegapixels,
     "ImageScaleToMegapixelsAdvanced": ImageScaleToMegapixelsAdvanced,
     "SteakedLibrary": SteakedLibrary,
+    "SaveImageToLibrary": SaveImageToLibrary,
     "SteakedTextConcat": TextConcat,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -59,7 +61,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleToMegapixels": "Scale to Megapixels (SDXL Safe)",
     "ImageScaleToMegapixelsAdvanced": "Scale to Megapixels (Advanced)",
     "SteakedLibrary": "Prompt Library",
-    "SaveToLibrary": "Save to Library",
+    "SaveImageToLibrary": "Save Image to Library",
     "SteakedTextConcat": "Text Concat",
 }
 

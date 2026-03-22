@@ -175,8 +175,10 @@ export async function showImageMeta(src, filename) {
   try {
     const meta = await _parsePngMeta(src);
     if (meta.prompt) {
+      // Replace bare NaN tokens (invalid JSON, emitted by some ComfyUI nodes
+      // via is_changed) so JSON.parse doesn't throw on the whole prompt.
+      const pd = JSON.parse(meta.prompt.replace(/\bNaN\b/g, "null"));
       hasMeta = true;
-      const pd = JSON.parse(meta.prompt);
 
       // Build a set of every node-id that is referenced as an input by any other node.
       // This tells us which nodes are actually "wired up" in the workflow.
@@ -228,7 +230,7 @@ export async function showImageMeta(src, filename) {
         // referenced by another node, it's a meaningful text source to display.
         if (cls === "CLIPTextEncode") continue;
 
-        const txt = inp.text;
+        const txt = inp.text_0 || inp.text || inp.prompt || inp.negative_prompt || null;
         if (typeof txt === "string" && txt.trim() && referencedIds.has(nodeId))
           textNodes.push({ title: node._meta?.title ?? cls, text: txt.trim() });
       }
@@ -415,6 +417,7 @@ export function showSearchableMenu(title, items, onSelect, { placeholder = "Type
   let filteredItems = [...items];
   
   const ov = overlay(() => ov.remove());
+  ov.addEventListener("pointerdown", (e) => { if (e.target === ov) ov.remove(); });
 
   const pop = mk("div", {
     background: "#1e1e1e",
@@ -430,7 +433,8 @@ export function showSearchableMenu(title, items, onSelect, { placeholder = "Type
     boxShadow: "0 12px 48px rgba(0,0,0,0.85)",
     overflow: "hidden",
   });
-  pop.addEventListener("click", (e) => e.stopPropagation());
+  pop.addEventListener("click",       (e) => e.stopPropagation());
+  pop.addEventListener("pointerdown", (e) => e.stopPropagation());
 
   // Title
   const hdr = mk(
@@ -500,10 +504,12 @@ export function showSearchableMenu(title, items, onSelect, { placeholder = "Type
           width: "100%",
           boxSizing: "border-box",
         }, item || "(none)");
-        row.onclick = () => {
+        row.addEventListener("pointerdown", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
           onSelect(item);
           ov.remove();
-        };
+        });
         row.onmouseenter = () => {
           selectedIndex = idx;
           renderItems();
