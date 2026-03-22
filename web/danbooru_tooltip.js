@@ -48,7 +48,7 @@ class DanbooruTooltip {
     if (!element) return false;
 
     const tagName = element.tagName?.toLowerCase();
-    console.log("[Danbooru] Checking element tagName:", tagName, "element:", element);
+    // console.log("[Danbooru] Checking element tagName:", tagName, "element:", element);
 
     if (tagName === "textarea" || tagName === "input") return true;
 
@@ -63,7 +63,7 @@ class DanbooruTooltip {
       parent = parent.parentElement;
     }
 
-    console.log("[Danbooru] Allowing selection for debugging purposes");
+    // console.log("[Danbooru] Allowing selection for debugging purposes");
     return true;
   }
 
@@ -137,10 +137,10 @@ class DanbooruTooltip {
   }
 
   async onTextSelection(e) {
-    console.log("[Danbooru] onTextSelection triggered");
+    // console.log("[Danbooru] onTextSelection triggered");
 
     if (!this.isEnabled()) {
-      console.log("[Danbooru] Extension disabled in settings");
+      // console.log("[Danbooru] Extension disabled in settings");
       this.hideTooltip();
       return;
     }
@@ -154,10 +154,10 @@ class DanbooruTooltip {
     this.debounceTimer = setTimeout(async () => {
       const selection = window.getSelection();
       const selectedText = selection.toString();
-      console.log("[Danbooru] Selected text:", selectedText);
+      // console.log("[Danbooru] Selected text:", selectedText);
 
       if (!selectedText || selectedText.length === 0) {
-        console.log("[Danbooru] No text selected");
+        // console.log("[Danbooru] No text selected");
         this.hideTooltip();
         return;
       }
