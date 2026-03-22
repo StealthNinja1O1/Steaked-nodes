@@ -59,6 +59,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageScaleToMegapixels": "Scale to Megapixels (SDXL Safe)",
     "ImageScaleToMegapixelsAdvanced": "Scale to Megapixels (Advanced)",
     "SteakedLibrary": "Prompt Library",
+    "SaveToLibrary": "Save to Library",
     "SteakedTextConcat": "Text Concat",
 }
 

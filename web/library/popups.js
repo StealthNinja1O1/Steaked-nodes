@@ -402,63 +402,173 @@ export async function showImageMeta(src, filename) {
   document.body.appendChild(ov);
 }
 
-// ── Generation capture toast ──────────────────────────────────────────────────
-let _captureToast = null;
+// ── Searchable dropdown menu ───────────────────────────────────────────────────
+/**
+ * Show a searchable dropdown menu for selecting from a list of items.
+ * @param {string} title - Menu title
+ * @param {string[]} items - Array of items to choose from
+ * @param {(item:string)=>void} onSelect - Callback when item is selected
+ * @param {{ placeholder?: string }} options - Optional settings
+ */
+export function showSearchableMenu(title, items, onSelect, { placeholder = "Type to filter..." } = {}) {
+  let selectedIndex = 0;
+  let filteredItems = [...items];
+  
+  const ov = overlay(() => ov.remove());
 
-export function showCaptureToast(charName, onSave, onDismiss, imageCount = 1) {
-  if (_captureToast) _captureToast.remove();
-
-  const toast = mk("div", {
-    position: "fixed",
-    bottom: "24px",
-    right: "24px",
+  const pop = mk("div", {
     background: "#1e1e1e",
-    border: "1px solid #3a5050",
+    border: "1px solid #3a3a3a",
     borderRadius: "8px",
-    padding: "12px 14px",
-    zIndex: "100001",
-    minWidth: "260px",
-    boxShadow: "0 8px 32px rgba(0,0,0,0.7)",
-    fontFamily: "'Segoe UI',Arial,sans-serif",
+    padding: "12px",
+    maxWidth: "420px",
+    width: "90vw",
+    maxHeight: "70vh",
     display: "flex",
     flexDirection: "column",
-    gap: "10px",
+    gap: "8px",
+    boxShadow: "0 12px 48px rgba(0,0,0,0.85)",
+    overflow: "hidden",
   });
-  _captureToast = toast;
+  pop.addEventListener("click", (e) => e.stopPropagation());
 
-  const imgLabel = imageCount > 1 ? `${imageCount} images` : "1 image";
-  toast.appendChild(mk("div", { fontSize: "11px", color: "#7ab" }, "📸 Generation complete"));
-  toast.appendChild(mk("div", { fontSize: "12px", color: "#ccc" }, `Save ${imgLabel} to "${charName}"?`));
-
-  const row = mk("div", { display: "flex", gap: "8px" });
-  const yes = mk(
-    "button",
-    { ...BTN_BASE, background: "#1e2e2e", color: "#7ab", borderColor: "#3a5050" },
-    `Save ${imageCount > 1 ? "all" : ""}`,
+  // Title
+  const hdr = mk(
+    "div",
+    { fontSize: "11px", color: "#666", textTransform: "uppercase", letterSpacing: "0.06em" },
+    title,
   );
-  const no = mk("button", { ...BTN_BASE }, "Dismiss");
-  yes.onmouseenter = () => (yes.style.background = "#253535");
-  yes.onmouseleave = () => (yes.style.background = "#1e2e2e");
-  no.onmouseenter = () => (no.style.background = "#2e2e2e");
-  no.onmouseleave = () => (no.style.background = "#252525");
-  yes.onclick = () => {
-    toast.remove();
-    _captureToast = null;
-    onSave();
-  };
-  no.onclick = () => {
-    toast.remove();
-    _captureToast = null;
-    onDismiss?.();
-  };
-  row.append(yes, no);
-  toast.appendChild(row);
 
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    if (_captureToast === toast) {
-      toast.remove();
-      _captureToast = null;
+  // Search input
+  const searchField = document.createElement("input");
+  searchField.type = "text";
+  searchField.placeholder = placeholder;
+  searchField.value = "";
+  Object.assign(searchField.style, {
+    background: "#141414",
+    border: "1px solid #3a3a3a",
+    borderRadius: "5px",
+    color: "#ddd",
+    padding: "8px 10px",
+    fontSize: "12px",
+    fontFamily: "'Segoe UI',Arial,sans-serif",
+    width: "100%",
+    boxSizing: "border-box",
+    outline: "none",
+  });
+  searchField.addEventListener("focus", () => (searchField.style.borderColor = "#555"));
+  searchField.addEventListener("blur", () => (searchField.style.borderColor = "#3a3a3a"));
+
+  // Items list container
+  const listContainer = mk("div", {
+    overflowY: "auto",
+    overflowX: "hidden",
+    maxHeight: "50vh",
+    display: "flex",
+    flexDirection: "column",
+    gap: "2px",
+    minWidth: "320px",
+  });
+
+  // Render filtered items
+  function renderItems() {
+    listContainer.innerHTML = "";
+    if (filteredItems.length === 0) {
+      listContainer.appendChild(
+        mk("div", {
+          padding: "16px",
+          textAlign: "center",
+          color: "#666",
+          fontSize: "11px",
+        }, "No matches found")
+      );
+    } else {
+      filteredItems.forEach((item, idx) => {
+        const isHover = idx === selectedIndex;
+        const row = mk("div", {
+          padding: "8px 10px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          fontSize: "12px",
+          lineHeight: "1.5",
+          minHeight: "34px",
+          color: isHover ? "#fff" : "#ccc",
+          background: isHover ? "#3a5050" : "transparent",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          width: "100%",
+          boxSizing: "border-box",
+        }, item || "(none)");
+        row.onclick = () => {
+          onSelect(item);
+          ov.remove();
+        };
+        row.onmouseenter = () => {
+          selectedIndex = idx;
+          renderItems();
+        };
+        listContainer.appendChild(row);
+      });
     }
-  }, 12000);
+  }
+
+  // Update filtered items based on search
+  function updateFilter() {
+    const query = searchField.value.toLowerCase();
+    if (!query) {
+      filteredItems = [...items];
+    } else {
+      filteredItems = items.filter((item) => item.toLowerCase().includes(query));
+    }
+    selectedIndex = Math.min(selectedIndex, filteredItems.length - 1);
+    if (selectedIndex < 0 && filteredItems.length > 0) selectedIndex = 0;
+    renderItems();
+  }
+
+  // Search input handlers
+  searchField.addEventListener("input", updateFilter);
+  searchField.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      selectedIndex = Math.min(selectedIndex + 1, filteredItems.length - 1);
+      renderItems();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      selectedIndex = Math.max(selectedIndex - 1, 0);
+      renderItems();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filteredItems.length > 0 && filteredItems[selectedIndex] !== undefined) {
+        onSelect(filteredItems[selectedIndex]);
+        ov.remove();
+      }
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      ov.remove();
+    }
+  });
+
+  // Item count label
+  const countLabel = mk("div", {
+    fontSize: "10px",
+    color: "#555",
+    textAlign: "right",
+  }, `${filteredItems.length} items`);
+
+  // Update count when filter changes
+  const originalUpdateFilter = updateFilter;
+  updateFilter = function() {
+    originalUpdateFilter();
+    countLabel.textContent = `${filteredItems.length} items`;
+  };
+
+  // Assemble popup
+  pop.append(hdr, searchField, listContainer, countLabel);
+  ov.appendChild(pop);
+  document.body.appendChild(ov);
+  
+  // Initial render
+  renderItems();
+  setTimeout(() => searchField.focus(), 0);
 }

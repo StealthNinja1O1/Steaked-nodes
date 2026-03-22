@@ -26,7 +26,7 @@ import {
   drawPlaceholder,
 } from "./draw.js";
 import { apiGet, apiPost, clamp, uid, downloadBlob, comfyImageUrl } from "./api.js";
-import { textPopup, showImageMeta, showCaptureToast } from "./popups.js";
+import { textPopup, showImageMeta, showSearchableMenu } from "./popups.js";
 import { showLoraInfo } from "./civitai.js";
 
 // Module-level set of all live instances — used by generation capture
@@ -301,14 +301,15 @@ export class LibraryCanvas {
     if (!ckptCol) {
       drawCombo(ctx, M, cy, W - M * 2, ROW, base.checkpoint, this.hover === "ckpt");
       this.reg("ckpt", M, cy, W - M * 2, ROW, (e) => {
-        const items = ["", ...(this.assets.checkpoints ?? [])].map((o) => ({
-          content: o || "(none)",
-          callback: () => {
-            base.checkpoint = o;
+        showSearchableMenu(
+          "Select Base Checkpoint",
+          ["", ...(this.assets.checkpoints ?? [])],
+          (item) => {
+            base.checkpoint = item;
             this._save();
           },
-        }));
-        new LiteGraph.ContextMenu(items, { event: e });
+          { placeholder: "Type to filter checkpoints..." }
+        );
       });
       cy += ROW + GAP;
     }
@@ -907,14 +908,15 @@ export class LibraryCanvas {
       if (ov.enabled) {
         drawCombo(ctx, M, cy, W - M * 2, ROW, ov.checkpoint, this.hover === "ov-ckpt");
         this.reg("ov-ckpt", M, cy, W - M * 2, ROW, (e) => {
-          const items = ["", ...(this.assets.checkpoints ?? [])].map((o) => ({
-            content: o || "(none)",
-            callback: () => {
-              ov.checkpoint = o;
+          showSearchableMenu(
+            "Select Character Override Checkpoint",
+            ["", ...(this.assets.checkpoints ?? [])],
+            (item) => {
+              ov.checkpoint = item;
               this._save();
             },
-          }));
-          new LiteGraph.ContextMenu(items, { event: e });
+            { placeholder: "Type to filter checkpoints..." }
+          );
         });
         cy += ROW + 2;
       }
@@ -1425,16 +1427,14 @@ export class LibraryCanvas {
   }
 
   _loraFilePicker(e, lo) {
-    const opts = ["", ...(this.assets.loras ?? [])];
-    new LiteGraph.ContextMenu(
-      opts.map((o) => ({
-        content: o || "(none)",
-        callback: () => {
-          lo.file = o;
-          this._save();
-        },
-      })),
-      { event: e },
+    showSearchableMenu(
+      "Select LoRA",
+      ["", ...(this.assets.loras ?? [])],
+      (item) => {
+        lo.file = item;
+        this._save();
+      },
+      { placeholder: "Type to filter LoRAs..." }
     );
   }
 
@@ -1764,28 +1764,5 @@ export class LibraryCanvas {
       inp.remove();
     });
     inp.click();
-  }
-
-  /** Called by the generation capture listener to save an output image into this character's gallery. */
-  async captureImage(imageInfo) {
-    const ch = this._char;
-    if (!ch) return;
-    try {
-      const imgUrl = comfyImageUrl(imageInfo);
-      const imgResp = await fetch(imgUrl);
-      const blob = await imgResp.blob();
-      const ext = (imageInfo.filename.split(".").pop() || "png").toLowerCase();
-      const fname = `capture_${Date.now()}.${ext}`;
-      const fd = new FormData();
-      fd.append("image", blob, fname);
-      const r = await fetch(`/steaked/library/character/${ch.id}/image`, { method: "POST", body: fd });
-      const d = await r.json();
-      if (d.success) {
-        (ch.gallery ?? (ch.gallery = [])).push(d.filename);
-        await this._save();
-      }
-    } catch (err) {
-      console.error("[SteakedLib] capture:", err);
-    }
   }
 }
