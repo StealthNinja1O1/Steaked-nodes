@@ -140,19 +140,14 @@ app.registerExtension({
             }
           }
 
-          // Try to restore folder type from crop data for dropdown selections
-          const cropDataWidget = this.widgets.find((w) => w.name === "crop_data");
-          if (cropDataWidget && cropDataWidget.value && cropDataWidget.value.trim() !== "") {
-            try {
-              const savedCrop = JSON.parse(cropDataWidget.value);
-              if (savedCrop.folderType) {
-                this.cropState.folderType = savedCrop.folderType;
-              }
-            } catch (e) {
-              // Ignore parse errors
-            }
-          }
+          // Prevent loadImagePreview from restoring the old filename from saved crop data.
+          // This flag is only cleared during the initial load (onNodeCreated / onConfigure).
+          this.ignoreSavedFolderType = true;
           this.loadImagePreview(filename);
+          // Clear flag after a short delay so the initial page-load path still works
+          setTimeout(() => {
+            this.ignoreSavedFolderType = false;
+          }, 200);
         };
 
         // Update serializeValue to include folder type in the returned filename
