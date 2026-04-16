@@ -18,6 +18,7 @@ from .scale_to_megapixels import ImageScaleToMegapixels, ImageScaleToMegapixelsA
 from .character_library import SteakedLibrary
 from .save_image_to_library import SaveImageToLibrary
 from .text_concat import TextConcat
+from .openpose_editor import OpenPoseEditor
 
 # Register Danbooru API proxy routes
 from . import danbooru_proxy
@@ -42,6 +43,7 @@ NODE_CLASS_MAPPINGS = {
     "SteakedLibrary": SteakedLibrary,
     "SaveImageToLibrary": SaveImageToLibrary,
     "SteakedTextConcat": TextConcat,
+    "OpenPoseEditor": OpenPoseEditor,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -63,6 +65,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SteakedLibrary": "Prompt Library",
     "SaveImageToLibrary": "Save Image to Library",
     "SteakedTextConcat": "Text Concat",
+    "OpenPoseEditor": "OpenPose Editor",
 }
 
 WEB_DIRECTORY = "./web/"
