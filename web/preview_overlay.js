@@ -87,7 +87,7 @@ class PreviewOverlay {
 
     const closeBtn = document.createElement("button");
     closeBtn.className = "steaked-preview-overlay-btn";
-    closeBtn.title = "Hide overlay (Ctrl+Shift+P to toggle)";
+    closeBtn.title = "Hide overlay (Shift+P to toggle)";
     closeBtn.innerHTML = "✕";
     closeBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -695,7 +695,7 @@ app.registerExtension({
 
     // Keyboard shortcut: P to toggle
     document.addEventListener("keydown", (e) => {
-      if (e.key === "P") {
+      if (e.key === "P" && (e.shiftKey || e.ctrlKey) && !e.altKey && !e.metaKey) {
         e.preventDefault();
         overlay.toggle();
       }
