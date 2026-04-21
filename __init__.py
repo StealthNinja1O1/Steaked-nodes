@@ -1,11 +1,11 @@
-from .colors import ColorBlender
-from .crop import ImageCrop
-from .distortion import ImageDistortion
-from .texture_generator import NebulaGenerator
-from .edge_detection import EdgeDetection
-from .blend import ImageBlender
-from .halftone import HalftoneEffect
-from .regional_prompts import (
+from .nodes.colors import ColorBlender
+from .nodes.crop import ImageCrop
+from .nodes.distortion import ImageDistortion
+from .nodes.texture_generator import NebulaGenerator
+from .nodes.edge_detection import EdgeDetection
+from .nodes.blend import ImageBlender
+from .nodes.halftone import HalftoneEffect
+from .nodes.regional_prompts import (
     RegionalPromptsLatent,
     RegionalPromptsAttention,
     RegionalPromptsLatentImg2Img,
@@ -13,15 +13,16 @@ from .regional_prompts import (
     RegionalPromptsLatentImageInput,
     RegionalPromptsAttentionImageInput,
 )
-from .any_switch import AnySwitch
-from .scale_to_megapixels import ImageScaleToMegapixels, ImageScaleToMegapixelsAdvanced
-from .character_library import SteakedLibrary
-from .save_image_to_library import SaveImageToLibrary
-from .text_concat import TextConcat
-from .openpose_editor import OpenPoseEditor
+from .nodes.any_switch import AnySwitch
+from .nodes.scale_to_megapixels import ImageScaleToMegapixels, ImageScaleToMegapixelsAdvanced
+from .nodes.character_library import SteakedLibrary
+from .nodes.save_image_to_library import SaveImageToLibrary
+from .nodes.text_concat import TextConcat
+from .nodes.openpose_editor import OpenPoseEditor
+from .nodes.preview_url import GetImageFromURL
 
 # Register Danbooru API proxy routes
-from . import danbooru_proxy
+from .nodes import danbooru_proxy
 
 NODE_CLASS_MAPPINGS = {
     "LoadAndCrop": ImageCrop,
@@ -44,6 +45,7 @@ NODE_CLASS_MAPPINGS = {
     "SaveImageToLibrary": SaveImageToLibrary,
     "SteakedTextConcat": TextConcat,
     "OpenPoseEditor": OpenPoseEditor,
+    "GetImageFromURL": GetImageFromURL,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -66,6 +68,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SaveImageToLibrary": "Save Image to Library",
     "SteakedTextConcat": "Text Concat",
     "OpenPoseEditor": "OpenPose Editor",
+    "GetImageFromURL": "Get image from URL (with referer)",
 }
 
 WEB_DIRECTORY = "./web/"
