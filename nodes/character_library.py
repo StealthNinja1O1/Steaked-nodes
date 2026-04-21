@@ -25,7 +25,7 @@ from server import PromptServer
 
 
 # ─── Library storage location ─────────────────────────────────────────────────
-LIBRARY_DIR = Path(__file__).parent / "library"
+LIBRARY_DIR = Path(__file__).parent.parent / "library"
 LIBRARY_JSON = LIBRARY_DIR / "library.json"
 
 BLANK_LIBRARY = {

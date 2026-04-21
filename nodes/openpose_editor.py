@@ -14,7 +14,7 @@ from aiohttp import web
 
 routes = PromptServer.instance.routes
 
-_EDITOR_HTML_PATH = os.path.join(os.path.dirname(__file__), "web", "openpose_editor", "index.html")
+_EDITOR_HTML_PATH = os.path.join(os.path.dirname(__file__), "..", "web", "openpose_editor", "index.html")
 
 # Subfolder inside ComfyUI's input directory for pose images
 _POSE_SUBFOLDER = "openpose"
