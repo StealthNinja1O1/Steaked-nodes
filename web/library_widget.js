@@ -21,6 +21,8 @@ app.registerExtension({
     nodeType.prototype.onNodeCreated = function () {
       onNodeCreated?.apply(this, arguments);
 
+      this.serialize_widgets = true;
+
       const HIDDEN_WIDGETS = new Set(["selected_character", "snap_data"]);
       for (const w of this.widgets ?? []) {
         if (HIDDEN_WIDGETS.has(w.name)) {
@@ -73,25 +75,16 @@ app.registerExtension({
     nodeType.prototype.onConfigure = function (info) {
       onConfigure?.apply(this, arguments);
       const node = this;
-      setTimeout(() => {
-        if (!node._libCanvas) return;
-        node._libCanvas._load().then?.(() => {
-          const sw = node.widgets?.find((w) => w.name === "selected_character");
-          if (sw?.value) {
-            node._libCanvas.charId = sw.value;
-            node._libCanvas.view = "char";
-            node._libCanvas.scrollY = 0;
-            app.graph?.setDirtyCanvas(true);
-          }
-        });
-        // Fallback: _load() may not return a promise in all versions, so also apply immediately
-        const sw = node.widgets?.find((w) => w.name === "selected_character");
-        if (sw?.value) {
-          node._libCanvas.charId = sw.value;
-          node._libCanvas.view = "char";
-          node._libCanvas.scrollY = 0;
-        }
-      }, 50);
+
+      // Synchronously restore charId from widget value BEFORE the async _load()
+      // resolves and calls _syncWidgetFromState(). This avoids the race where
+      // _load() overwrites both selected_character and snap_data with blanks.
+      const sw = node.widgets?.find((w) => w.name === "selected_character");
+      if (sw?.value && node._libCanvas) {
+        node._libCanvas.charId = sw.value;
+        node._libCanvas.view = "char";
+        node._libCanvas.scrollY = 0;
+      }
     };
   },
 });
