@@ -232,6 +232,12 @@ export async function showLibraryModal(onImageSelect) {
     sortSelect.appendChild(option);
   });
 
+  // Restore saved sort preference
+  const savedSort = localStorage.getItem("steaked_library_sort");
+  if (savedSort !== null) {
+    sortSelect.value = savedSort;
+  }
+
   headerBottom.append(searchInput, sortSelect);
   header.append(headerTop, folderBreadcrumb, headerBottom);
 
@@ -677,8 +683,8 @@ export async function showLibraryModal(onImageSelect) {
     }
   }
 
-  // Initial render (first batch)
-  render(true);
+  // Initial render (first batch) — use saved sort if available
+  render(true, "", parseInt(sortSelect.value));
 
   // Add scroll listener for infinity scroll
   gallery.addEventListener("scroll", checkScrollForMore);
@@ -690,6 +696,7 @@ export async function showLibraryModal(onImageSelect) {
 
   // Sort handler
   sortSelect.addEventListener("change", (e) => {
+    localStorage.setItem("steaked_library_sort", e.target.value);
     render(true, searchInput.value, e.target.value);
   });
 
