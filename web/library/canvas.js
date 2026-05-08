@@ -144,29 +144,37 @@ export class LibraryCanvas {
     setW("selected_character", this.charId ?? "");
 
     const ch = this._char;
-    let snap = {};
+    const base = this.data.base ?? {};
+    const ov = ch?.model_override ?? {};
+    const useOv = ov.enabled && ov.checkpoint;
+
+    // Always include model + active LoRAs (base or character override)
+    const model = useOv ? ov.checkpoint : (base.checkpoint ?? "");
+    const loras = useOv ? (ov.loras ?? []) : [...(base.loras ?? []), ...(ov.loras ?? [])];
+    const activeLoras = loras
+      .filter((l) => l.enabled !== false && l.file)
+      .map((l) => ({ file: l.file, strength: l.strength ?? 1, clip_strength: l.clip_strength ?? l.strength ?? 1 }));
+
+    let snap = {
+      char_name: ch?.name ?? "",
+      model,
+      loras: activeLoras,
+      style_tags: "",
+      base_prompt: "",
+      combined: "",
+      negative: "",
+    };
+
     if (ch) {
-      const ov = ch.model_override ?? {};
-      const base = this.data.base ?? {};
-      const useOv = ov.enabled && ov.checkpoint;
-      const loras = useOv ? (ov.loras ?? []) : [...(base.loras ?? []), ...(ov.loras ?? [])];
-      const activeLoras = loras
-        .filter((l) => l.enabled !== false && l.file)
-        .map((l) => ({ file: l.file, strength: l.strength ?? 1, clip_strength: l.clip_strength ?? l.strength ?? 1 }));
       const clean = (s) => (s || "").replace(/\n/g, " ").replace(/\s+/g, " ").trim();
       const blocks = (ch.text_blocks ?? [])
         .filter((b) => b.enabled !== false && (b.text ?? "").trim())
         .map((b) => clean(b.text));
       const parts = [clean(ch.style_tags), clean(ch.base_prompt), ...blocks].filter(Boolean);
-      snap = {
-        char_name: ch.name ?? "",
-        model: useOv ? ov.checkpoint : (base.checkpoint ?? ""),
-        loras: activeLoras,
-        style_tags: ch.style_tags ?? "",
-        base_prompt: ch.base_prompt ?? "",
-        combined: parts.join(", "),
-        negative: ch.negative ?? "",
-      };
+      snap.style_tags = ch.style_tags ?? "";
+      snap.base_prompt = ch.base_prompt ?? "";
+      snap.combined = parts.join(", ");
+      snap.negative = ch.negative ?? "";
     }
     setW("snap_data", JSON.stringify(snap));
   }
