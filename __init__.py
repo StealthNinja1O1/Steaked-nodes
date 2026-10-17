@@ -21,8 +21,8 @@ from .nodes.text_concat import TextConcat
 from .nodes.openpose_editor import OpenPoseEditor
 from .nodes.preview_url import GetImageFromURL
 
-# Register Danbooru API proxy routes
-from .nodes import danbooru_proxy
+# Register Booru API proxy routes
+from .nodes import booru
 
 NODE_CLASS_MAPPINGS = {
     "LoadAndCrop": ImageCrop,
