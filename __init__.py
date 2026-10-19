@@ -20,9 +20,12 @@ from .nodes.save_image_to_library import SaveImageToLibrary
 from .nodes.text_concat import TextConcat
 from .nodes.openpose_editor import OpenPoseEditor
 from .nodes.preview_url import GetImageFromURL
+from .nodes.lora_loader import SteakedLoraLoader
 
 # Register Booru API proxy routes
 from .nodes import booru
+# Register lora loader routes (combos, safetensors metadata)
+from .nodes import lora_meta
 
 NODE_CLASS_MAPPINGS = {
     "LoadAndCrop": ImageCrop,
@@ -46,6 +49,7 @@ NODE_CLASS_MAPPINGS = {
     "SteakedTextConcat": TextConcat,
     "OpenPoseEditor": OpenPoseEditor,
     "GetImageFromURL": GetImageFromURL,
+    "ComboLoraLoader": SteakedLoraLoader,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -69,6 +73,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SteakedTextConcat": "Text Concat",
     "OpenPoseEditor": "OpenPose Editor",
     "GetImageFromURL": "Get image from URL (with referer)",
+    "ComboLoraLoader": "Combo Lora Loader",
 }
 
 WEB_DIRECTORY = "./web/"
