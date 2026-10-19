@@ -13,7 +13,7 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000;
  * providers and only if the user's browser/IP isn't Cloudflare-blocked).
  */
 export function getTransport() {
-  return app.ui.settings.getSettingValue("Steaked.Booru.Transport", "proxy");
+  return app.ui.settings.getSettingValue("Steaked.Booru.Transport");
 }
 
 export const CATEGORY_COLORS = {
@@ -43,7 +43,7 @@ export const PROVIDER_LABELS = {
 };
 
 export function getProvider() {
-  return app.ui.settings.getSettingValue("Steaked.Booru.Provider", "danbooru");
+  return app.ui.settings.getSettingValue("Steaked.Booru.Provider");
 }
 
 export async function fetchProviders() {

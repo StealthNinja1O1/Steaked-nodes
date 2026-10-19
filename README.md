@@ -1,10 +1,10 @@
-# ComfyUI Custom Nodes
+# Steaked Nodes
 
-A collection of powerful image processing nodes for ComfyUI, including distortion effects, texture generation, edge detection, blending, and retro effects.
+A collection of custom nodes for [ComfyUI](https://github.com/comfyanonymous/ComfyUI): model and LoRA loading with modern UIs, regional prompting, image processing effects, and library tooling.
 
 ## Installation
 
-1. Clone or download this repository into your ComfyUI `custom_nodes` folder:
+1. Clone into your ComfyUI `custom_nodes` folder:
 
 ```bash
 cd ComfyUI/custom_nodes
@@ -13,183 +13,102 @@ git clone https://github.com/StealthNinja1O1/Steaked-nodes.git
 
 2. Restart ComfyUI
 
-Or do so from the Comfy Manager -> Install via Git URL
+Or install via Comfy Manager -> Install via Git URL
 
-## Available Nodes
+## Loaders
 
-### 1. **Load and Crop Image** (`LoadAndCrop`)
+### Smart Model Loader (`SmartModelLoader`)
 
-Load images with advanced cropping capabilities.
+One loader for every model type. Browses `checkpoints` and `diffusion_models` folders together, detects what each file contains from its safetensors header, and outputs `MODEL`, `CLIP`, and `VAE`.
 
-**Features:**
+- Combined searchable listing (Anima diffusion models and SDXL checkpoints side by side)
+- Detects whether CLIP/VAE are baked in; external overrides shown only when needed
+- Optional external CLIP/VAE override pickers (text_encoders / vae folders)
+- Weight dtype option (fp8 variants) for diffusion models
+- Model info modal with civitai sidecar data when available
 
-- Load images from file
-- Crop with adjustable dimensions and position
+### Combo Lora Loader (`ComboLoraLoader`)
 
----
+A LoRA stack with a full DOM widget UI: drag rows to reorder, scrub strengths with the mouse, multi-select with ctrl/shift, and activation words surfaced automatically.
 
-### 2. **Color Blender** (`ColorBlender`)
+- **Free tab**: ad-hoc LoRA stack, drop `.safetensors` files straight onto the node
+- **Combos**: save stacks as named combos organized in folders, re-use and re-sync them across nodes
+- **Activation words**: read from civitai sidecars or safetensors training metadata, exposed as a node output and a copyable badge per row
+- **Info modal**: training parameters, tag frequency, civitai data, raw metadata
+- Outputs `MODEL`, `CLIP`, and `ACTIVATION_WORDS` (comma-joined string, ready for prompt concat)
 
-Advanced color manipulation and blending.
+## Regional Prompting
 
-**Features:**
+### Regional Prompts (`RegionalPromptsLatent` / `RegionalPromptsAttention` + Img2Img and Image Input variants)
 
-- Color overlay with multiple blend modes
-- Hue/Saturation/Brightness adjustments
-- Color temperature control
-- Tint and vibrance adjustments
+Define up to 4 rectangular regions on a canvas, each with its own prompt, weight, and timestep schedule.
 
----
+- **Latent** variants: standard latent masking, better isolation between regions
+- **Attention** variants: attention hooks, faster with more coherent blending. Recommended for most use cases
+- Interactive canvas: drag boxes to move, drag edges/corners to resize
+- Per-region weight (0.0-2.0) and start/end timesteps
+- Overlapping regions are normalized automatically; unmasked areas fall back to the base prompt
 
-### 3. **Image Distortion** (`ImageDistortion`)
+## Image Processing
 
-Apply 12 different distortion effects to images.
+### Load and Crop Image (`LoadAndCrop`)
 
-**Distortion Types:**
+Load images from the input folder (with subfolder browsing) and crop with adjustable dimensions and position.
 
-- **Wave** - Sinusoidal wave patterns
-- **Swirl** - Rotational swirl effect (supports offset)
-- **Kaleidoscope** - Mirrored kaleidoscope segments
-- **Pixel Sort** - Sort pixels by brightness
-- **Displacement** - Noise-based displacement mapping
-- **Fisheye** - Fisheye lens distortion
-- **Ripple** - Concentric ripple effect (supports offset)
-- **Twist** - Spiral twist effect
-- **Spherize** - Spherical warping
-- **Glitch** - Digital glitch artifacts
-- **Mosaic** - Mosaic tile effect
-- **Warp** - Multi-octave noise warping
+### Color Blender (`ColorBlender`)
 
-**Parameters:**
+Color overlay with multiple blend modes, hue/saturation/brightness adjustments, temperature, tint, and vibrance controls.
 
-- `intensity` (0-100) - Effect strength
-- `frequency` (0-100) - Pattern frequency/detail
-- `offset_x/y` (-50 to 50) - Center offset for applicable effects
+### Image Distortion (`ImageDistortion`)
 
-### 5. **Edge Detection** (`EdgeDetection`)
+12 distortion effects: Wave, Swirl, Kaleidoscope, Pixel Sort, Displacement, Fisheye, Ripple, Twist, Spherize, Glitch, Mosaic, and Warp. Parameters: intensity (0-100), frequency (0-100), offset x/y.
 
-Detect edges with multiple algorithms and styling options.
+### Edge Detection (`EdgeDetection`)
 
-**Algorithms:**
+Edge detection with Sobel, Prewitt, Scharr, Roberts, Laplacian, and Canny algorithms. Adjustable threshold, thickness, edge/background colors, invert.
 
-- **Sobel** - Standard gradient-based edge detection
-- **Prewitt** - Similar to Sobel, different kernel
-- **Scharr** - Improved Sobel with better rotational symmetry
-- **Roberts** - Fast 2×2 gradient operator
-- **Laplacian** - Second derivative edge detection
-- **Canny** - Multi-stage edge detection with non-maximum suppression
+### Image Blender (`ImageBlender`)
 
-**Parameters:**
+Blend two images with 14 professional blend modes (Normal, Multiply, Screen, Overlay, Soft Light, Hard Light, Color Dodge, Color Burn, Darken, Lighten, Difference, Exclusion, Add, Subtract) with opacity and optional mask.
 
-- `threshold` (0-1) - Edge sensitivity
-- `thickness` (1-5) - Edge line thickness
-- `invert` - Swap edge/background colors
-- `color RGB` - Edge line color
-- `background RGB` - Background color
+### Halftone Effect (`HalftoneEffect`)
 
-**Use Cases:**
+Retro printing and dithering effects: Halftone Dots, Halftone Lines, Bayer Dithering, Floyd-Steinberg, Ordered Dithering, Newspaper, Crosshatch.
 
-- Line art generation
-- Outline extraction
-- Artistic edge effects
-- Preprocessing for other effects
+### Nebula Generator (`NebulaGenerator`)
 
----
+Procedural nebula/texture generation.
 
-### 6. **Image Blender** (`ImageBlender`)
+### Scale to Megapixels (`ImageScaleToMegapixels` / `ImageScaleToMegapixelsAdvanced`)
 
-Blend two images with professional blend modes.
+Scale to a target megapixel count while snapping dimensions to multiples (64 for SDXL, 8 for SD1.5) to avoid generation artifacts.
 
-**Blend Modes:**
+## Utility
 
-- **Normal** - Standard alpha blending
-- **Multiply** - Darkens (multiply colors)
-- **Screen** - Lightens (inverse multiply)
-- **Overlay** - Contrast-preserving blend
-- **Soft Light** - Gentle contrast adjustment
-- **Hard Light** - Strong contrast adjustment
-- **Color Dodge** - Brightens highlights
-- **Color Burn** - Darkens shadows
-- **Darken** - Keep darker pixels
-- **Lighten** - Keep lighter pixels
-- **Difference** - Absolute difference
-- **Exclusion** - Similar to difference, softer
-- **Add** - Additive blending
-- **Subtract** - Subtractive blending
+### Prompt Library (`SteakedLibrary`)
 
-**Parameters:**
+Prompt and character library with civitai integration: browse your lora collection, fetch civitai metadata and images, and store prompts/characters in a shared library. Booru tag proxy included for tag lookup and autocomplete.
 
-- `base_image` - Bottom layer
-- `blend_image` - Top layer (auto-resized to match)
-- `blend_mode` - Blend algorithm
-- `opacity` (0-1) - Blend strength
-- `mask` (optional) - Grayscale mask for selective blending
+### Save Image to Library (`SaveImageToLibrary`)
 
-**Use Cases:**
+Save generated images into the library for later reference.
 
-- Composite multiple generations
-- Texture overlay
-- Color grading
-- Creative blending effects
+### Text Concat (`SteakedTextConcat`)
 
----
+Concatenate text inputs with a configurable separator.
 
-### 7. **Halftone Effect** (`HalftoneEffect`)
+### Any Switch (`AnySwitch`)
 
-Apply retro printing and dithering effects.
+Pass through the first connected input of any type.
 
-**Effect Types:**
+### OpenPose Editor (`OpenPoseEditor`)
 
-- **Halftone Dots** - Classic circular halftone print
-- **Halftone Lines** - Parallel line pattern
-- **Bayer Dithering** - 4×4 ordered dithering
-- **Floyd-Steinberg** - Error diffusion dithering
-- **Ordered Dithering** - 8×8 ordered dithering
-- **Newspaper** - Newspaper print simulation
-- **Crosshatch** - Multi-directional hatching
+Edit OpenPose skeletons directly in the node.
 
-**Parameters:**
+### Get Image from URL (`GetImageFromURL`)
 
-- `dot_size` (2-20) - Size of halftone elements
-- `angle` (0-360°) - Rotation angle for directional effects
-- `sharpness` (0.1-2.0) - Dot sharpness/contrast
-- `contrast` (0.5-2.0) - Input contrast adjustment
+Load an image from a URL with referer support (for sites that block hotlinking).
 
-**Use Cases:**
+## License
 
-- Retro/vintage effects
-- Print simulation
-- Comic book style
-- Pop art effects
-- Monochrome artistic styles
-
-### 8. **Regional Prompts** (`RegionalPromptsLatent`, `RegionalPromptsAttention`)
-
-Define up to 4 rectangular regions on a canvas to apply different prompts to specific areas of an image. Each region has its own prompt, weight, and timestep scheduling.
-
-**Two Variants:**
-
-1. **Regional Prompts (Latent)** - Uses ComfyUI's standard latent masking mechanism. Each regional prompt is encoded separately and combined with masks. Better isolation between regions, but may have visible seams at boundaries.
-
-2. **Regional Prompts (Attention)** - Uses attention hooks to modify the attention computation during sampling. Faster with more coherent blending, but some "bleeding" between regions may occur. **Recommended for most use cases.**
-
-**Features:**
-
-- **Interactive Canvas**: Drag boxes to move, drag edges/corners to resize
-- **Per-Region Controls**:
-  - **Weight** (0.0-2.0): Strength multiplier for the region's influence
-  - **Start/End** (0.0-1.0): Timestep range when the regional prompt is active
-    - `Start`: When the prompt begins affecting generation (0.0 = first step)
-    - `End`: When the prompt stops affecting generation (1.0 = last step)
-    - Example: `Start: 0.0, End: 0.3` applies the prompt only during the first 30% of sampling
-- **Automatic Mask Handling**: Overlapping regions are automatically normalized
-- **Base Prompt Fill**: Unmasked areas are automatically filled with the base prompt
-
-**Inputs:**
-
-- `base_prompt`: Main prompt applied everywhere (or as fallback for unmasked areas)
-- `prompt_1` to `prompt_4`: Prompts for each of the 4 available boxes
-- `width`/`height`: Canvas dimensions in pixels
-- `clip`: CLIP model for text encoding
-
----
+MIT

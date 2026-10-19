@@ -19,6 +19,7 @@ import {
   showConfirm,
   showAlert,
 } from "./dialogs.js";
+import { forwardCanvasEvents } from "../common/canvas_forward.js";
 
 function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -143,6 +144,8 @@ export class LoraLoaderWidget {
     this.footerEl = h("div", { class: "sl-footer" });
 
     this.el.append(this.tabsEl, this.rowsEl, this.dropEl, this.footerEl);
+
+    this._detachForward = forwardCanvasEvents(this.el, { allWheel: true });
 
     this.dropEl.addEventListener("dragover", (e) => { e.preventDefault(); this.dropEl.classList.add("drag-over"); });
     this.dropEl.addEventListener("dragleave", () => this.dropEl.classList.remove("drag-over"));
@@ -275,6 +278,7 @@ export class LoraLoaderWidget {
 
   _onRowMouseDown(e, row, i) {
     if (e.target.closest("input, .sl-row-toggle, .sl-badge")) return;
+    if (e.button !== 0) return;
     e.preventDefault();
 
     // Selection logic
@@ -369,6 +373,7 @@ export class LoraLoaderWidget {
   }
 
   _scrubStart(e, entry) {
+    if (e.button !== 0) return;
     e.stopPropagation();
     e.preventDefault();
     const startX = e.clientX;
@@ -489,9 +494,9 @@ export class LoraLoaderWidget {
     menu.style.left = `${Math.min(rect.left, window.innerWidth - 200)}px`;
     menu.style.top = `${rect.bottom + 2}px`;
 
-    const close = () => { menu.remove(); document.removeEventListener("mousedown", onDoc, true); };
+    const close = () => { menu.remove(); document.removeEventListener("pointerdown", onDoc, true); };
     const onDoc = (ev) => { if (!menu.contains(ev.target)) close(); };
-    setTimeout(() => document.addEventListener("mousedown", onDoc, true), 0);
+    setTimeout(() => document.addEventListener("pointerdown", onDoc, true), 0);
 
     this._renderComboFolder(menu, null, close);
   }

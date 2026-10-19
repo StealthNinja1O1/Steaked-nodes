@@ -26,9 +26,7 @@ app.registerExtension({
       const HIDDEN_WIDGETS = new Set(["selected_character", "snap_data"]);
       for (const w of this.widgets ?? []) {
         if (HIDDEN_WIDGETS.has(w.name)) {
-          w.computeSize = () => [0, -4];
-          w.h = -4; 
-          w.draw = () => {};
+          w.hidden = true;
           w.serializeValue = async () => w.value ?? "";
         }
       }
@@ -38,14 +36,12 @@ app.registerExtension({
         const edRes = ComfyWidgets.STRING(this, "__inline_editor__", ["STRING", { multiline: true, default: "" }], app);
         const ew = edRes?.widget;
         if (ew) {
-          const el = ew.element ?? ew.inputEl;
-          ew.computeSize = () => [0, -4];
-          ew.h = -4;
-          ew.draw = () => {};
+          ew.hidden = true;
           ew.serializeValue = async () => ""; // never persist editing state
+          const el = ew.element ?? ew.inputEl;
           if (el) {
             document.body.appendChild(el);
-            el.style.cssText = "display:none;position:fixed;z-index:99999;";
+            el.style.display = "none";
             ew.element = null;
             ew.inputEl = null;
           }

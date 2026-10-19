@@ -725,7 +725,7 @@ app.registerExtension({
     };
     tryAddButton();
 
-    const settingEnabled = app.ui.settings.getSettingValue("Steaked.PreviewOverlay.Enabled", false);
+    const settingEnabled = app.ui.settings.getSettingValue("Steaked.PreviewOverlay.Enabled");
     if (settingEnabled || overlay.state.enabled) {
       overlay.state.enabled = true;
       overlay.show();

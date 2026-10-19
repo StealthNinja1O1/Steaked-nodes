@@ -30,7 +30,7 @@ export class BooruTooltip {
   }
 
   isEnabled() {
-    return app.ui.settings.getSettingValue("Steaked.Booru.TooltipEnabled", true);
+    return app.ui.settings.getSettingValue("Steaked.Booru.TooltipEnabled");
   }
 
   onTextSelection(e) {
@@ -96,7 +96,7 @@ export class BooruTooltip {
     const post = info.posts;
     const cat = tagData?.category ?? 0;
     const color = CATEGORY_COLORS[cat] || "#888";
-    const showImages = app.ui.settings.getSettingValue("Steaked.Booru.ShowImages", true);
+    const showImages = app.ui.settings.getSettingValue("Steaked.Booru.ShowImages");
 
     const el = document.createElement("div");
     el.className = "booru-tooltip";

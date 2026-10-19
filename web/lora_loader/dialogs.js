@@ -516,9 +516,9 @@ export function showLoraChooser(anchorRect, currentLoras) {
     let filtered = [];
     let hl = 0;
 
-    const close = (val) => { el.remove(); document.removeEventListener("mousedown", onDocDown, true); resolve(val); };
+    const close = (val) => { el.remove(); document.removeEventListener("pointerdown", onDocDown, true); resolve(val); };
     const onDocDown = (e) => { if (!el.contains(e.target)) close(null); };
-    document.addEventListener("mousedown", onDocDown, true);
+    document.addEventListener("pointerdown", onDocDown, true);
 
     // Token-AND substring search: every space-separated token must appear in
     // the path. Filename hits rank above folder hits, prefixes above substrings.

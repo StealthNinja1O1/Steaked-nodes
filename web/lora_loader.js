@@ -21,32 +21,32 @@ app.registerExtension({
 
       const stackWidget = this.widgets?.find((w) => w.name === "lora_stack");
       if (!stackWidget) return;
-      stackWidget.computeSize = () => [0, -4];
-      stackWidget.h = -4;
-      stackWidget.draw = () => {};
+      // Properly hide the raw JSON widget: excluded from layout, sizing, and
+      // the DOM widget overlay layer entirely.
+      stackWidget.hidden = true;
       stackWidget.serializeValue = async () =>
         typeof stackWidget.value === "string" ? stackWidget.value : JSON.stringify(stackWidget.value ?? {});
       if (typeof stackWidget.value !== "string" || !stackWidget.value) stackWidget.value = "{}";
-      const rawEl = stackWidget.element ?? stackWidget.inputEl;
-      if (rawEl) {
-        document.body.appendChild(rawEl);
-        rawEl.style.cssText = "display:none;position:fixed;z-index:-1;pointer-events:none;";
-        stackWidget.element = null;
-        stackWidget.inputEl = null;
-      }
 
       const widget = new LoraLoaderWidget(this, stackWidget);
       this._steakedLoraWidget = widget;
 
+
+      const contentHeight = () => {
+        const measured = widget.el?.scrollHeight ?? 0;
+        if (measured > 20) return measured;
+        const rows = widget.entries?.length ?? 0;
+        return 26 + rows * 28 + 30 + 36 + 14;
+      };
       const domWidget = this.addDOMWidget("lora_loader_ui", "steaked_lora_ui", widget.el, {
         hideOnZoom: false,
-        getMinHeight: () => 260,
-        getMaxHeight: () => 460,
-        getHeight: () => Math.max(200, widget.el?.offsetHeight ?? 300),
+        margin: 4,
+        getMinHeight: () => contentHeight() + 8,
+        getMaxHeight: () => contentHeight() + 8,
+        getHeight: () => contentHeight() + 8,
         onDraw: () => {},
       });
       domWidget.serialize = false;
-      this.setSize([Math.max(this.size[0], 340), this.size[1]]);
     };
 
     // Ensure the node is big enough for the DOM widget after graph load
@@ -56,6 +56,7 @@ app.registerExtension({
       if (this._steakedLoraWidget) {
         this._steakedLoraWidget._loadState();
         this._steakedLoraWidget._loadCombos();
+        this.setDirtyCanvas?.(true, true);
       }
     };
 

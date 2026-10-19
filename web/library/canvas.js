@@ -68,6 +68,7 @@ export class LibraryCanvas {
     };
     node.onMouseDown = function (e) {
       if (e.canvasY - this.pos[1] < 0) return false;
+      if (e.button !== undefined && e.button !== 0) return false;
       return self.onMouseDown(e);
     };
     node.onMouseMove = function (e) {

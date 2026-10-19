@@ -17,6 +17,11 @@ const CSS = `
 }
 .steaked-lora-widget * { box-sizing: border-box; }
 
+.steaked-lora-widget { overflow: hidden; }
+.steaked-lora-widget > * { flex-shrink: 0; }
+/* Rows yield when the node is manually shrunk below content size */
+.steaked-lora-widget > .steaked-lora-rows { flex-shrink: 1; min-height: 0; }
+
 .steaked-lora-tabs {
   display: flex;
   align-items: stretch;
@@ -67,7 +72,6 @@ const CSS = `
 .sl-tab-add:hover { color: var(--sl-accent); }
 
 .steaked-lora-rows {
-  max-height: 220px;
   overflow-y: auto;
   scrollbar-width: thin;
 }
