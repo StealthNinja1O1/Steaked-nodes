@@ -22,6 +22,7 @@ from .nodes.openpose_editor import OpenPoseEditor
 from .nodes.preview_url import GetImageFromURL
 from .nodes.lora_loader import SteakedLoraLoader
 from .nodes.model_loader import SteakedModelLoader
+from .nodes.cooler_preview import CoolerPreviewImage
 
 # Register Booru API proxy routes
 from .nodes import booru
@@ -54,6 +55,7 @@ NODE_CLASS_MAPPINGS = {
     "GetImageFromURL": GetImageFromURL,
     "ComboLoraLoader": SteakedLoraLoader,
     "SmartModelLoader": SteakedModelLoader,
+    "CoolerPreviewImage": CoolerPreviewImage,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LoadAndCrop": "Load and Crop Image",
@@ -79,6 +81,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GetImageFromURL": "Get image from URL (with referer)",
     "ComboLoraLoader": "Combo Lora Loader",
     "SmartModelLoader": "Smart Model Loader",
+    "CoolerPreviewImage": "Cooler Preview Image",
 }
 
 WEB_DIRECTORY = "./web/"
