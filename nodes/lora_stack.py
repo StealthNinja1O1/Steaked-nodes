@@ -47,8 +47,8 @@ def parse_stack(raw):
     if not isinstance(raw, dict):
         return []
 
-    if isinstance(raw.get("combo"), dict):
-        combo = raw["combo"]
+    combo = raw.get("combo")
+    if isinstance(combo, dict) and raw.get("active") != "free":
         entries = [normalize_entry(e) for e in combo.get("entries", [])]
     else:
         entries = [normalize_entry(e) for e in raw.get("free", [])]

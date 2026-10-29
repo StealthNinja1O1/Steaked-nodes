@@ -35,8 +35,6 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-const MAX_ROWS = 8;
-
 export class LoraLoaderWidget {
   constructor(node, stackWidget) {
     this.node = node;
@@ -47,6 +45,7 @@ export class LoraLoaderWidget {
     this.modal = new LoraInfoModal();
     this._dragState = null;
     this._suppressSync = false;
+    this._scrollBottom = false;
 
     this._buildDom();
     this._loadState();
@@ -130,6 +129,7 @@ export class LoraLoaderWidget {
     if (!found) return;
     this.state.combo = { id: found.combo.id, name: found.combo.name, entries: JSON.parse(JSON.stringify(found.combo.entries ?? [])) };
     this.selected.clear();
+    this.rowsEl.scrollTop = 0;
     this._syncWidget();
     this.render();
   }
@@ -208,6 +208,7 @@ export class LoraLoaderWidget {
   }
 
   renderRows() {
+    const prevScroll = this.rowsEl.scrollTop;
     this.rowsEl.replaceChildren();
     const entries = this.entries;
     this.selected = new Set([...this.selected].filter((i) => i < entries.length));
@@ -220,7 +221,12 @@ export class LoraLoaderWidget {
     entries.forEach((entry, i) => {
       this.rowsEl.append(this._renderRow(entry, i));
     });
-    if (entries.length > MAX_ROWS) this.rowsEl.scrollTop = this.rowsEl.scrollHeight;
+    if (this._scrollBottom) {
+      this.rowsEl.scrollTop = this.rowsEl.scrollHeight;
+      this._scrollBottom = false;
+    } else {
+      this.rowsEl.scrollTop = prevScroll;
+    }
   }
 
   _renderRow(entry, i) {
@@ -453,6 +459,7 @@ export class LoraLoaderWidget {
   addEntry(entry) {
     if (this.entries.some((e) => e.lora === entry.lora)) return;
     this._setEntries([...this.entries, entry]);
+    this._scrollBottom = true;
     this._syncWidget();
     this.render();
   }
@@ -479,8 +486,10 @@ export class LoraLoaderWidget {
 
   _activateTab(which) {
     this.state.active = which;
+    if (which === "free") this.state.combo = null;
     this.selected.clear();
     this._lastClicked = undefined;
+    this.rowsEl.scrollTop = 0;
     this._syncWidget();
     this.render();
   }
@@ -525,6 +534,7 @@ export class LoraLoaderWidget {
             this.state.active = combo.id;
             this.state.combo = { id: combo.id, name: combo.name, entries: JSON.parse(JSON.stringify(combo.entries ?? [])) };
             this.selected.clear();
+            this.rowsEl.scrollTop = 0;
             this._syncWidget();
             this.render();
             close();
@@ -569,6 +579,7 @@ export class LoraLoaderWidget {
     // Activate the saved combo
     this.state.active = combo.id;
     this.state.combo = { id: combo.id, name, entries: JSON.parse(JSON.stringify(entries)) };
+    this.rowsEl.scrollTop = 0;
     this._syncWidget();
     this.render();
   }
@@ -685,6 +696,7 @@ export class LoraLoaderWidget {
     this.state.active = id;
     this.state.combo = { id, name: found.combo.name, entries: JSON.parse(JSON.stringify(found.combo.entries ?? [])) };
     this.selected.clear();
+    this.rowsEl.scrollTop = 0;
     this._syncWidget();
     this.render();
   }

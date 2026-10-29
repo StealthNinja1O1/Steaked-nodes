@@ -553,6 +553,7 @@ export function showLoraChooser(anchorRect, currentLoras) {
           dir ? h("span", { class: "sl-ch-dir" }, dir) : null, name);
         list.append(row);
       });
+      list.children[hl]?.scrollIntoView({ block: "nearest" });
     };
 
     input.addEventListener("input", () => {
